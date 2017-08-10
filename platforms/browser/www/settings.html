@@ -1,0 +1,500 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <meta charset="utf-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link href="bootstrap-4.0.0-alpha.6-dist/css/bootstrap.min.css" rel="stylesheet" />
+    <script src="lib/jquery-1.11.3.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
+    <script src="bootstrap-4.0.0-alpha.6-dist/js/bootstrap.min.js"></script>
+
+    <script src="ExtraJS/mobileChecker.js"></script>
+    <script src="ExtraJS/master.js"></script>
+    <link href="Styles/NavBarStyle.css" rel="stylesheet" />
+    <link href="Styles/NeedRightSuperStyle.css" rel="stylesheet" />
+    <link href="Styles/EveryPageStyle.css" rel="stylesheet" />
+
+    <link href="lib/font-awesome-4.7.0/css/font-awesome.min.css" rel="stylesheet" />
+
+    <script>
+
+        $(document).ready(function () {
+            currentUser = GENERAL.USER.getUserInfo();
+            //if coming here without logging in first
+            if (currentUser == null) {
+                location.href = "loginPage.html";
+                return;
+            }
+
+            //if NOT on mobile
+            if (!jQuery.browser.mobile) {
+                //hide the microphone options
+                $(".recIcon").hide();
+            }
+
+            $("#permaID").text(currentUser.id);
+
+            //fill the personal info modal with info
+            fillPersonalInfoModal();
+
+        });
+
+        function VoiceCommand() {
+            //window.plugins.speechRecognition.isRecognitionAvailable(
+            //    function (e) {
+            //        alert('isRecognitionAvailable:' + e);
+            //    },
+            //    function (e) {
+            //        alert('error' + e);
+            //    }
+            //);
+
+            window.plugins.speechRecognition.requestPermission(
+              function (e)
+              { },
+              function (e) {
+                  return;
+              })
+
+            var options = {
+                language: "he",
+                matches: 1,
+                prompt: "מאזין",      // Android only
+                showPopup: true,  // Android only
+                showPartial: false // iOS only
+            }
+
+            window.plugins.speechRecognition.startListening(
+                function (e) {
+                    //if it's a common phrase and was dealt with in the master.js file
+                    if (VoiceCommands(e)) {
+                        return;
+                    }
+                },
+                function (e) {
+                    alert('error' + e);
+                },
+                options);
+        }
+
+        //////////START STUDENT//////////////
+
+
+
+        //////////END STUDENT//////////////
+
+        //////////START TEACHER//////////////
+        function FillTimeRangeForTeacher() {
+            //get the time range for that teacher
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetTimeRange",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ id: currentUser.id }),
+                type: "POST",
+                async: false,
+                success: function (res) {
+
+                    times = res.d;
+
+                    minimum = times[0];
+                    maximum = times[1];
+
+                    $("#inputStart").val(minimum);
+                    $("#inputEnd").val(maximum);
+
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function CheckStart(obj) {
+            var hour_arr = ["06:00", "06:45", "07:30", "08:15", "09:00", "09:45", "10:30"];
+            var input = obj.value;
+
+            if (input.length < 5) {
+                input = "0" + input;
+            }
+
+            for (var i = 0; i < hour_arr.length; i++) {
+                if (input <= hour_arr[i]) {
+                    if (input == hour_arr[i]) { return; }
+
+                    $("#inputStart").val(hour_arr[i]);
+                    return;
+                }
+            }
+        }
+        
+        //////////END TEACHER//////////////
+
+        function SaveChanges() {
+            //time range area
+            if ($("#inputStart").val() != minimum || $("#inputEnd").val() != maximum) {
+
+                minimum = $("#inputStart").val();
+                maximum = $("#inputEnd").val();
+
+                $.ajax({
+
+                    dataType: "json",
+                    url: GENERAL.webServerAddress + "/UpdateTimeRange",
+                    contentType: "application/json; charset=utf-8",
+                    data: JSON.stringify({ id: currentUser.id, start: minimum, end: maximum }),
+                    type: "POST",
+                    success: function () {
+                        $("#Updated").modal();
+                    },
+                    error: function (e) {
+                        alert("error " + e.responseText);
+                    }
+                });
+            }
+        }
+
+        function fillPersonalInfoModal() {
+            $(".popupFirstName").text("שם פרטי: " + currentUser.firstName);
+            $(".popupLastName").text("שם משפחה: " + currentUser.lastName);
+            $(".popupRegisterDate").text("תאריך הצטרפות: " + currentUser.register);
+
+            if (currentUser.type == "admin") {
+                school = GENERAL.ADMIN.getAdminSchool();
+                $("#popupSchool").text("מנהל בית ספר: " + school.Name).attr("id", school.Code);
+
+                searchForPending();
+
+                $("#studentNAV").remove();
+                $("#teacherNAV").remove();
+            }
+            else if (currentUser.type == "student") {
+                teacher = GENERAL.STUDENT.getStudentTeacher();
+                $("#popupTeacherName").text("מורה מלמד: " + teacher.FirstName + " " + teacher.LastName);
+
+                $("#adminNAV").remove();
+                $("#teacherNAV").remove();
+            }
+            else {
+
+                $("#studentNAV").remove();
+                $("#adminNAV").remove();
+
+                searchForPending();
+
+                FillTimeRangeForTeacher();
+
+            }
+
+            //set the info panel with the user info
+            $("#user-image").attr("src", currentUser.image)
+            $("#userFullName").text(GENERAL.USER.getUserFullName());
+
+        }
+
+        function searchForPending() {
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetAllPendingRequestsForATeacher",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ teacherid: currentUser.id }),
+                type: "POST",
+                success: function (res) {
+
+                    requestList = JSON.parse(res.d);
+
+                    if (requestList.length > 0) {
+                        $("#pending").removeClass("fa fa-envelope-open-o").addClass("fa fa-envelope").append(requestList.length);
+                    }
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function ShowPersonalInfoModal() {
+
+            if (currentUser.type == "admin")
+                $("#ShowAdminInfo").modal();
+
+            else if (currentUser.type == "student")
+                $("#ShowStudentInfo").modal();
+            else
+                $("#ShowTeacherInfo").modal();
+        }
+
+        function LogOut() {
+            Hitnatkut();
+        }
+
+    </script>
+
+</head>
+<body>
+
+    <br /><br /><br /><br />
+
+    <div id="teacherNAV">
+        <nav class="navbar navbar-toggleable-md navbar-inverse bg-inverse fixed-top">
+            <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <a class="navbar-brand" href="teacherCalendar.html" data-toggle="tooltip" title="דף הבית">
+                <img id="logo" src="images/EZDrive.png" />
+            </a>
+            <a class="navbar-brand" href="https://www.facebook.com/EZDrive-1357166781017888/" data-toggle="tooltip" title="לפייסבוק האפליקציה">
+                <i class="fa fa-facebook-official" style="color:white"></i>
+            </a>
+            <div class="collapse navbar-collapse" id="navbarsExampleDefault">
+
+                <div id="userInfoPanel" onclick="ShowPersonalInfoModal()" data-toggle="tooltip" data-placement="bottom" title="לחץ כאן לפרופיל">
+                    <img id="user-image">
+                    <span id="userFullName"></span>
+                </div>
+
+                <ul class="navbar-nav mr-auto">
+                    <li>
+                        <a class="nav-link" href="teacherCalendar.html"><i class="fa fa-calendar"></i> לוח זמנים <span class="sr-only">(current)</span></a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="http://example.com" id="dropdown01" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa fa-users"></i> תלמידים</a>
+                        <div class="dropdown-menu" aria-labelledby="dropdown01">
+                            <a class="dropdown-item" href="teacherAllStudents.html"><i class="fa fa-users"></i> כל התלמידים</a>
+                            <a class="dropdown-item" href="teacherProgress.html"><i class="fa fa-percent"></i> התקדמות תלמידים</a>
+                            <a class="dropdown-item" href="teacherRequests.html"><i class="fa fa-comment-o"></i> בקשות אישיות</a>
+                            <a class="dropdown-item" href="teacherGreenForm.html"><i class="fa fa-files-o"></i> פרטי טופס ירוק</a>
+                        </div>
+                    </li>
+                    <li>
+                        <a class="nav-link" href="studentsPendingForOK.html"><i id="pending" class="fa fa-envelope-open-o"></i> הודעות</a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="http://example.com" id="dropdown01" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa fa-car"></i> רכבים</a>
+                        <div class="dropdown-menu" aria-labelledby="dropdown01">
+                            <a class="dropdown-item" href="teacherCars.html"><i class="fa fa-sitemap"></i> הרכבים שלי</a>
+                            <a class="dropdown-item" href="addNewCar.html"><i class="fa fa-plus"></i> רכב חדש</a>
+                        </div>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-item active " href="settings.html"><i class="fa fa-cog fa-spin"></i> הגדרות</a>
+                    </li>
+                    <li class="nav-item">
+                        <i class="fa fa-microphone recIcon" onclick="VoiceCommand()"></i>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+        <div dir="rtl" style="margin-top:6%">
+            <form class="form-horizontal">
+                <div class="form-group">
+                    <h2>שעות פעילות</h2>
+                    <div class="col-sm-6">
+                        שעת התחלה (בקפיצות של 45 דקות, החל מהשעה 6 בבוקר)
+                    </div>
+                    <div class="col-sm-2">
+                        <input class="form-control" id="inputStart" type="time" value="06:00" min="06:00" max="21:00" placeholder="שעת התחלה" onblur="CheckStart(this)">
+                    </div>
+                    <div class="col-sm-6">
+                        שעת סיום
+                    </div>
+                    <div class="col-sm-2">
+                        <input class="form-control" id="inputEnd" type="time" value="21:00" min="06:00" max="21:00" placeholder="שעת סיום">
+                    </div>
+                </div>
+            </form>
+
+            <button type="button" id="saveChanges" class="btn btn-info btn-lg" onclick="SaveChanges()">שמור שינויים</button>
+
+        </div>
+
+    </div>
+
+    <div id="studentNAV">
+        <nav class="navbar navbar-toggleable-md navbar-inverse bg-inverse fixed-top">
+            <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <a class="navbar-brand" href="studentCalendar.html" data-toggle="tooltip" title="דף הבית">
+                <img id="logo" src="images/EZDrive.png" />
+            </a>
+            <a class="navbar-brand" href="https://www.facebook.com/EZDrive-1357166781017888/" data-toggle="tooltip" title="לפייסבוק האפליקציה">
+                <i class="fa fa-facebook-official" style="color:white"></i>
+            </a>
+            <div class="collapse navbar-collapse" id="navbarsExampleDefault">
+
+                <div id="userInfoPanel" onclick="ShowPersonalInfoModal()" data-toggle="tooltip" data-placement="bottom" title="לחץ כאן לפרופיל">
+                    <img id="user-image">
+                    <span id="userFullName"></span>
+                </div>
+
+                <ul class="navbar-nav mr-auto">
+                    <li>
+                        <a class="nav-link" href="studentCalendar.html"><i class="fa fa-calendar"></i> לוח זמנים <span class="sr-only">(current)</span></a>
+                    </li>
+                    <li>
+                        <a class="nav-link" href="studentProgress.html"><i class="fa fa-percent"></i> התקדמות</a>
+                    </li>
+                    <li>
+                        <a class="nav-link" href="studentGreenForm.html"><i class="fa fa-file-o"></i> טופס ירוק</a>
+                    </li>
+                    <li>
+                        <a class="nav-link" href="studentRequest.html"><i class="fa fa-comment-o"></i> בקשות אישיות</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-item active " href="settings.html"><i class="fa fa-cog fa-spin"></i> הגדרות</a>
+                    </li>
+                    <li class="nav-item">
+                        <i class="fa fa-microphone recIcon" onclick="VoiceCommand()"></i>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+    </div>
+
+    <div id="adminNAV">
+        <nav class="navbar navbar-toggleable-md navbar-inverse bg-inverse fixed-top">
+            <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <a class="navbar-brand" href="adminHomePage.html" data-toggle="tooltip" title="דף הבית">
+                <img id="logo" src="images/EZDrive.png" />
+            </a>
+            <a class="navbar-brand" href="https://www.facebook.com/EZDrive-1357166781017888/" data-toggle="tooltip" title="לפייסבוק האפליקציה">
+                <i class="fa fa-facebook-official" style="color:white"></i>
+            </a>
+            <div class="collapse navbar-collapse" id="navbarsExampleDefault">
+
+                <div id="userInfoPanel" onclick="ShowPersonalInfoModal()" data-toggle="tooltip" data-placement="bottom" title="לחץ כאן לפרופיל">
+                    <img id="user-image">
+                    <span id="userFullName"></span>
+                </div>
+
+                <ul class="navbar-nav mr-auto">
+                    <li>
+                        <a class="nav-link" href="adminHomePage.html"><i class="fa fa-home"></i> דף הבית <span class="sr-only">(current)</span></a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="http://example.com" id="dropdown01" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa fa-user"></i> מורים</a>
+                        <div class="dropdown-menu" aria-labelledby="dropdown01">
+                            <a class="dropdown-item" href="addNewTeacher.html"><i class="fa fa-plus"></i> מורה חדש</a>
+                            <a class="dropdown-item" href="allTeachers.html"><i class="fa fa-users"></i> כל המורים</a>
+                        </div>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="http://example.com" id="dropdown01" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa fa-car"></i> רכבים</a>
+                        <div class="dropdown-menu" aria-labelledby="dropdown01">
+                            <a class="dropdown-item" href="addNewCar.html"><i class="fa fa-plus"></i> רכב חדש</a>
+                            <a class="dropdown-item" href="allCars.html"><i class="fa fa-sitemap"></i> כל הרכבים</a>
+                            <a class="dropdown-item" href="addNewCarModel.html"><i class="fa fa-tag"></i> דגם חדש</a>
+                        </div>
+                    </li>
+                    <li>
+                        <a class="nav-link" href="studentsPendingForOK_ADMIN.html"><i id="pending" class="fa fa-envelope-open-o"></i> הודעות</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link nav-item active " href="settings.html"><i class="fa fa-cog fa-spin"></i> הגדרות</a>
+                    </li>
+                    <li class="nav-item">
+                        <i class="fa fa-microphone recIcon" onclick="VoiceCommand()"></i>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+    </div>
+
+    <div id="ShowTeacherInfo" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">פרטים אישיים</h4>
+                </div>
+                <div class="modal-body">
+                    <p class="popupFirstName"></p>
+                    <p class="popupLastName"></p>
+                    <p class="popupRegisterDate"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal" onclick="GoToEdit()">עריכת פרטים</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal" onclick="LogOut()">התנתקות</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="ShowStudentInfo" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">פרטים אישיים</h4>
+                </div>
+                <div class="modal-body">
+                    <p class="popupFirstName"></p>
+                    <p class="popupLastName"></p>
+                    <p class="popupRegisterDate"></p>
+                    <p id="popupTeacherName"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal" onclick="GoToEdit()">עריכת פרטים</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal" onclick="LogOut()">התנתקות</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="ShowAdminInfo" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">פרטים אישיים</h4>
+                </div>
+                <div class="modal-body">
+                    <p class="popupFirstName"></p>
+                    <p class="popupLastName"></p>
+                    <p class="popupRegisterDate"></p>
+                    <p id="popupSchool"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal" onclick="GoToEdit()">עריכת פרטים</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal" onclick="LogOut()">התנתקות</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="Updated" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">הגדרות עודכנו בהצלחה</h4>
+                </div>
+                <div class="modal-body">
+                    <p>.ההגדרות עודכנו במערכת בהצלחה</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal">סגור</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

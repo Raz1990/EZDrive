@@ -1,0 +1,788 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <meta charset="utf-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link href="bootstrap-4.0.0-alpha.6-dist/css/bootstrap.min.css" rel="stylesheet" />
+    <script src="lib/jquery-1.11.3.min.js"></script>
+
+    <link href="fullcalendar-3.2.0/fullcalendar.css" rel="stylesheet" />
+    <script src="fullcalendar-3.2.0/lib/jquery-ui.min.js"></script>
+    <script src="fullcalendar-3.2.0/lib/jquery.min.js"></script>
+    <script src="fullcalendar-3.2.0/lib/moment.min.js"></script>
+    <script src="fullcalendar-3.2.0/fullcalendar.js"></script>
+    <script src="fullcalendar-3.2.0/locale/he.js"></script>
+
+    <script src="fullcalendar-3.2.0/jquery.ui.touch.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
+    <script src="bootstrap-4.0.0-alpha.6-dist/js/bootstrap.min.js"></script>
+
+    <script src="ExtraJS/mobileChecker.js"></script>
+    <script src="ExtraJS/master.js"></script>
+    <link href="Styles/NavBarStyle.css" rel="stylesheet" />
+    <link href="Styles/NeedRightSuperStyle.css" rel="stylesheet" />
+    <link href="Styles/EveryPageStyle.css" rel="stylesheet" />
+
+    <link href="lib/font-awesome-4.7.0/css/font-awesome.min.css" rel="stylesheet" />
+
+    <style type="text/css">
+        #filters {
+            float: right;
+            margin-left: 50px;
+            margin-right: 50px;
+            padding-left: 20px;
+            padding-right: 20px;
+            border-radius: 50px;
+            border: solid;
+            text-align: right;
+            direction: rtl;
+        }
+
+        .fc table td, .fc-event {
+            border: solid;
+        }
+    </style>
+
+    <script>
+
+        $(document).ready(function () {
+
+            currentUser = GENERAL.USER.getUserInfo();
+            //if coming here without logging in first
+            if (currentUser == null || currentUser.type != "admin") {
+                location.href = "loginPage.html";
+                return;
+            }
+
+            //if NOT on mobile
+            if (!jQuery.browser.mobile) {
+                //hide the microphone options
+                $("#recIcon").hide();
+            }
+
+            //set the info panel with the user info
+            $("#user-image").attr("src", currentUser.image)
+            $("#userFullName").text(GENERAL.USER.getUserFullName());
+
+            //fill the personal info modal with info
+            fillPersonalInfoModal();
+
+            FillTeachersSanan();
+
+            searchForPending();
+
+            //CALENDAR
+            $('#calendar').fullCalendar({
+
+                header: {
+                    left: "next, today , prev ",
+                    center: "title",
+                    right: "agendaDay, agendaWeek , month"
+                },
+
+                height: 610,
+
+                minTime: "06:00",
+                maxTime: "21:01",
+
+                firstDay: 0, //sunday
+                hiddenDays: [6], // hide Saturday.
+                //defaultView: "agendaWeek",
+                locale: "he", //allows to use Hebrew-realted things
+                navLinks: true, //allows to link to specific days by clicking on them
+                //editable: true, //allows to edit events
+                selectable: true, //allows to select spots
+                clickable: true,
+                selectHelper: true,
+                slotDuration: '00:45:00', //makes the hours be in 45 minutes intervals
+
+                buttonText: {
+                    today: 'היום',
+                    next: "הבא",
+                    prev: "הקודם",
+                },
+
+                select: function (start, end) {
+
+                },
+
+                eventClick: function (event) {
+                    $.ajax({
+                        dataType: "json",
+                        url: GENERAL.webServerAddress + "/GetEvent",
+                        contentType: "application/json; charset=utf-8",
+                        data: JSON.stringify({ eventId: event.id }),
+                        type: "POST",
+                        success: function (res) {
+
+                            calendarEvent = JSON.parse(res.d);
+
+                            if (calendarEvent.Status) {
+                                $("#btn_inputLesson").text("שיעור הוזן במערכת").prop("disabled", true).removeClass("btn btn-info").addClass("btn btn-success");
+                                $("#btn_cancelLesson").hide();
+                            }
+                            else {
+                                $("#btn_inputLesson").text("סמן שיעור כבוצע").prop("disabled", false).removeClass("btn btn-success").addClass("btn btn-info");
+                                $("#btn_cancelLesson").show();
+                            }
+
+
+                            if (!event.student == null) {
+                                $("#editStudent").text("תלמיד: " + event.student);
+                                $("#editPlace").text("מיקום : " + calendarEvent.Location);
+                                $("#editRequest").text("בקשה אישית: " + calendarEvent.Request.Content);
+                                $("#editStudent").show();
+                                $("#editPlace").show();
+                                $("#editRequest").show();
+
+                                $("#editTitle").text("מורה מלמד: " + event.title);
+                                $("#editDate").text("תאריך השיעור: " + moment(event.start).format('DD-MM-YYYY'));
+                                $("#editTime").text("משך השיעור: " + moment(event.start).format('HH:mm') + " - " + moment(event.end).format('HH:mm'));
+
+                            }
+                            else {
+                                $("#editStudent").hide();
+                                $("#editPlace").hide();
+                                $("#editRequest").hide();
+
+                                $("#editTitle").text("אירוע אישי: " + event.title);
+                                $("#editDate").text("תאריך האירוע: " + moment(event.start).format('DD-MM-YYYY'));
+                                $("#editTime").text("משך האירוע: " + moment(event.start).format('HH:mm') + " - " + moment(event.end).format('HH:mm'));
+
+                            }
+
+                            $("#LessonDetailes").modal();
+                        }
+                    });
+                },
+
+                //Fill the calendar with every event found in the DB
+                events: function (event) {
+
+                    $('#calendar').fullCalendar('removeEvents', event._id);
+
+                    GetAllEventsForASchool();
+
+                } //events: function
+            }) //full calendar
+        });
+
+        function searchForPending() {
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetAllPendingRequestsForATeacher",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ teacherid: currentUser.id }),
+                type: "POST",
+                success: function (res) {
+                    requestList = JSON.parse(res.d);
+
+                    if (requestList.length > 0) {
+                        $("#pending").removeClass("fa fa-envelope-open-o").addClass("fa fa-envelope").append(requestList.length);
+                    }
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function VoiceCommand() {
+            //window.plugins.speechRecognition.isRecognitionAvailable(
+            //    function (e) {
+            //        alert('isRecognitionAvailable:' + e);
+            //    },
+            //    function (e) {
+            //        alert('error' + e);
+            //    }
+            //);
+
+            window.plugins.speechRecognition.requestPermission(
+              function (e)
+              { },
+              function (e) {
+                  return;
+              })
+
+            var options = {
+                language: "he",
+                matches: 1,
+                prompt: "מאזין",      // Android only
+                showPopup: true,  // Android only
+                showPartial: false // iOS only
+            }
+
+            window.plugins.speechRecognition.startListening(
+                function (e) {
+                    //if it's a common phrase and was dealt with in the master.js file
+                    if (VoiceCommands(e)) {
+                        return;
+                    }
+                },
+                function (e) {
+                    alert('error' + e);
+                },
+                options);
+        }
+
+        function GetAllEventsForASchool() {
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetAllEventsForASchool",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ schoolId: GENERAL.ADMIN.getAdminSchool().Code }),
+                type: "POST",
+                success: function (res) {
+
+                    listOfEvents = JSON.parse(res.d);
+
+                    //run for each lesson stored in the DB for a specific teacher
+                    $(listOfEvents).each(function (index) {
+
+                        eventDATE = listOfEvents[index].EventDate;
+
+                        //to get each and every part of the date
+                        splitDateInfo = eventDATE.split('/');
+
+                        eventYEAR = splitDateInfo[2];
+                        eventMONTH = splitDateInfo[1];
+
+                        if (eventMONTH.length < 2) {
+                            eventMONTH = "0" + eventMONTH;
+                        }
+
+                        eventDAY = splitDateInfo[0];
+
+                        if (eventDAY.length < 2) {
+                            eventDAY = "0" + eventDAY;
+                        }
+
+                        //the complete date string needed for the event
+                        DateString = eventYEAR + "-" + eventMONTH + "-" + eventDAY;
+
+                        //this is to check if the date has allready passed
+                        DateToday = new Date();
+                        todayMonth = '' + parseInt(DateToday.getMonth() + 1);
+                        todayDay = '' + DateToday.getDate();
+
+                        if (todayMonth.length < 2) todayMonth = '0' + todayMonth;
+                        if (todayDay.length < 2) todayDay = '0' + todayDay;
+
+                        DateToday = DateToday.getFullYear() + "-" + todayMonth + "-" + todayDay;
+
+                        if (DateString < DateToday) {
+                            color = "salmon";
+                        }
+                        else
+                            color = "";
+
+                        //to get each and every part of the time
+                        splitSTARTHourInfo = listOfEvents[index].StartingHour.split(':');
+
+                        eventSTARTHOUR = splitSTARTHourInfo[0];
+                        if (eventSTARTHOUR.length < 2) {
+                            eventSTARTHOUR = "0" + eventSTARTHOUR;
+                        }
+
+                        eventSTARTMINUTE = splitSTARTHourInfo[1];
+
+                        if (eventSTARTMINUTE.length < 2) {
+                            eventSTARTMINUTE = eventSTARTMINUTE + "0";
+                        }
+
+                        //the complete time string needed for the "start" of an event
+                        StartHourString = eventSTARTHOUR + ":" + eventSTARTMINUTE;
+
+                        splitENDHourInfo = listOfEvents[index].EndingHour.split(':');
+
+                        eventENDHOUR = splitENDHourInfo[0];
+                        if (eventENDHOUR.length < 2) {
+                            eventENDHOUR = "0" + eventENDHOUR;
+                        }
+
+                        eventENDMINUTE = splitENDHourInfo[1];
+                        if (eventENDMINUTE.length < 2) {
+                            eventENDMINUTE = eventENDMINUTE + "0";
+                        }
+
+                        //the complete time string needed for the "end" of an event
+                        EndHourString = eventENDHOUR + ":" + eventENDMINUTE;
+
+                        whenToSTART = DateString + "T" + StartHourString + ":00.000Z";
+                        whenToEND = DateString + "T" + EndHourString + ":00.000Z";
+
+                        //if the event is marked as a lesson NOT fed to the DB
+                        if (listOfEvents[index].Status) {
+                            color = "#2ae32a";
+                        }
+
+                        $.ajax({
+                            dataType: "json",
+                            url: GENERAL.webServerAddress + "/GetPersonName",
+                            async: false,
+                            contentType: "application/json; charset=utf-8",
+                            data: JSON.stringify({ id: listOfEvents[index].TeacherId }),
+                            type: "POST",
+                            success: function (res) {
+
+                                teacherName = res.d;
+
+                            }//success TEACHER NAME
+                        });//ajax TEACHER NAME
+
+                        //if the event is a lesson for a student
+                        if (listOfEvents[index].StudentId != "") {
+
+                            $.ajax({
+                                dataType: "json",
+                                url: GENERAL.webServerAddress + "/GetPersonName",
+                                async: false,
+                                contentType: "application/json; charset=utf-8",
+                                data: JSON.stringify({ id: listOfEvents[index].StudentId }),
+                                type: "POST",
+                                success: function (res) {
+
+                                    studentName = res.d;
+                                    if (color != "") {
+                                        eventData = {
+                                            id: listOfEvents[index].EventCode,
+                                            title: teacherName,
+                                            student: studentName,
+                                            start: whenToSTART,
+                                            end: whenToEND,
+                                            color: color
+                                        }
+                                    }
+                                    else
+                                        eventData = {
+                                            id: listOfEvents[index].EventCode,
+                                            title: teacherName,
+                                            student: studentName,
+                                            start: whenToSTART,
+                                            end: whenToEND
+                                        }
+                                }
+                            });//AJAX STUDENT NAME
+                        } //IF LESSON
+
+                            //if it's an event made by the teacher
+                        else {
+                            eventData = {
+                                id: listOfEvents[index].EventCode,
+                                title: teacherName + " : " + listOfEvents[index].Title,
+                                start: whenToSTART,
+                                end: whenToEND,
+                                type: "event",
+                                color: "yellow"
+                            };
+                        }
+
+                        //this renders the data on the calendar
+                        $('#calendar').fullCalendar('renderEvent', eventData, true);
+                    })//LOOP
+                    $('#calendar').fullCalendar('changeView', 'agendaWeek');
+                },//success get events
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            }); //ajax
+        }
+
+        function GetAllEventsForATeacher() {
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetAllEventsForATeacher",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ teacherid: $("#teacherFilter option:selected").attr("id") }),
+                type: "POST",
+                success: function (res) {
+
+                    listOfEvents = JSON.parse(res.d);
+
+                    //run for each lesson stored in the DB for a specific teacher
+                    $(listOfEvents).each(function (index) {
+
+                        eventDATE = listOfEvents[index].EventDate;
+
+                        //to get each and every part of the date
+                        splitDateInfo = eventDATE.split('/');
+
+                        eventYEAR = splitDateInfo[2];
+                        eventMONTH = splitDateInfo[1];
+
+                        if (eventMONTH.length < 2) {
+                            eventMONTH = "0" + eventMONTH;
+                        }
+
+                        eventDAY = splitDateInfo[0];
+
+                        if (eventDAY.length < 2) {
+                            eventDAY = "0" + eventDAY;
+                        }
+
+                        //the complete date string needed for the event
+                        DateString = eventYEAR + "-" + eventMONTH + "-" + eventDAY;
+
+                        //this is to check if the date has allready passed
+                        DateToday = new Date();
+                        todayMonth = '' + parseInt(DateToday.getMonth() + 1);
+                        todayDay = '' + DateToday.getDate();
+
+                        if (todayMonth.length < 2) todayMonth = '0' + todayMonth;
+                        if (todayDay.length < 2) todayDay = '0' + todayDay;
+
+                        DateToday = DateToday.getFullYear() + "-" + todayMonth + "-" + todayDay;
+
+                        if (DateString < DateToday) {
+                            color = "salmon";
+                        }
+                        else
+                            color = "";
+
+                        //to get each and every part of the time
+                        splitSTARTHourInfo = listOfEvents[index].StartingHour.split(':');
+
+                        eventSTARTHOUR = splitSTARTHourInfo[0];
+                        if (eventSTARTHOUR.length < 2) {
+                            eventSTARTHOUR = "0" + eventSTARTHOUR;
+                        }
+
+                        eventSTARTMINUTE = splitSTARTHourInfo[1];
+
+                        if (eventSTARTMINUTE.length < 2) {
+                            eventSTARTMINUTE = eventSTARTMINUTE + "0";
+                        }
+
+                        //the complete time string needed for the "start" of an event
+                        StartHourString = eventSTARTHOUR + ":" + eventSTARTMINUTE;
+
+                        splitENDHourInfo = listOfEvents[index].EndingHour.split(':');
+
+                        eventENDHOUR = splitENDHourInfo[0];
+                        if (eventENDHOUR.length < 2) {
+                            eventENDHOUR = "0" + eventENDHOUR;
+                        }
+
+                        eventENDMINUTE = splitENDHourInfo[1];
+                        if (eventENDMINUTE.length < 2) {
+                            eventENDMINUTE = eventENDMINUTE + "0";
+                        }
+
+                        //the complete time string needed for the "end" of an event
+                        EndHourString = eventENDHOUR + ":" + eventENDMINUTE;
+
+                        whenToSTART = DateString + "T" + StartHourString + ":00.000Z";
+                        whenToEND = DateString + "T" + EndHourString + ":00.000Z";
+
+                        //if the event is marked as a lesson NOT fed to the DB
+                        if (listOfEvents[index].Status) {
+                            color = "#2ae32a";
+                        }
+
+                        $.ajax({
+                            dataType: "json",
+                            url: GENERAL.webServerAddress + "/GetPersonName",
+                            async: false,
+                            contentType: "application/json; charset=utf-8",
+                            data: JSON.stringify({ id: listOfEvents[index].TeacherId }),
+                            type: "POST",
+                            success: function (res) {
+
+                                teacherName = res.d;
+
+                            }//success TEACHER NAME
+                        });//ajax TEACHER NAME
+
+                        //if the event is a lesson for a student
+                        if (listOfEvents[index].StudentId != "") {
+
+                            $.ajax({
+                                dataType: "json",
+                                url: GENERAL.webServerAddress + "/GetPersonName",
+                                async: false,
+                                contentType: "application/json; charset=utf-8",
+                                data: JSON.stringify({ id: listOfEvents[index].StudentId }),
+                                type: "POST",
+                                success: function (res) {
+
+                                    studentName = res.d;
+                                    if (color != "") {
+                                        eventData = {
+                                            id: listOfEvents[index].EventCode,
+                                            title: teacherName,
+                                            student: studentName,
+                                            start: whenToSTART,
+                                            end: whenToEND,
+                                            color: color
+                                        }
+                                    }
+                                    else
+                                        eventData = {
+                                            id: listOfEvents[index].EventCode,
+                                            title: teacherName,
+                                            student: studentName,
+                                            start: whenToSTART,
+                                            end: whenToEND
+                                        }
+                                }
+                            });//AJAX STUDENT NAME
+                        } //IF LESSON
+
+                            //if it's an event made by the teacher
+                        else {
+                            eventData = {
+                                id: listOfEvents[index].EventCode,
+                                title: teacherName +" : " + listOfEvents[index].Title,
+                                start: whenToSTART,
+                                end: whenToEND,
+                                type: "event",
+                                color: "yellow"
+                            };
+                        }
+
+                        //this renders the data on the calendar
+                        $('#calendar').fullCalendar('renderEvent', eventData, true);
+                    })//LOOP
+                    $('#calendar').fullCalendar('changeView', 'agendaWeek');
+                },//success get events
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            }); //ajax
+        }
+
+        function fillPersonalInfoModal() {
+            $("#popupFirstName").text("שם פרטי: " + currentUser.firstName);
+            $("#popupLastName").text("שם משפחה: " + currentUser.lastName);
+            $("#popupRegisterDate").text("תאריך הצטרפות: " + currentUser.register);
+
+            if (GENERAL.ADMIN.getAdminSchool() == null) {
+                $.ajax({
+                    dataType: "json",
+                    url: GENERAL.webServerAddress + "/GetSchoolFromTeacher",
+                    contentType: "application/json; charset=utf-8",
+                    data: JSON.stringify({ id: currentUser.id }),
+                    type: "POST",
+                    success: function (res) {
+
+                        school = JSON.parse(res.d);
+
+                        $("#popupSchool").text("מנהל בית ספר: " + school.Name).attr("id", school.Code);
+
+                        GENERAL.ADMIN.setAdminSchool(school);
+                    },
+                    error: function (e) {
+                        alert("error " + e.responseText);
+                    }
+                });
+            }//if
+            else {
+                school = GENERAL.ADMIN.getAdminSchool();
+                $("#popupSchool").text("מנהל בית ספר: " + school.Name).attr("id", school.Code);
+            }
+        }
+
+        function ShowPersonalInfoModal() {
+            $("#ShowPersonalInfo").modal();
+        }
+
+        function LogOut() {
+            Hitnatkut();
+        }
+
+        function GoToEdit() {
+            location.href = "editUserDetailes.html";
+        }
+
+        function FillTeachersSanan() {
+            $("#teacherFilter").html("<option>בחר</option>");
+
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetTeachersInSchool",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ schoolCode: GENERAL.ADMIN.getAdminSchool().Code, past: false }),
+                type: "POST",
+                success: function (res) {
+
+                    var TeacherList = JSON.parse(res.d);
+
+                    for (var i in TeacherList) {
+                        var $option = $("<option>").html(TeacherList[i].FirstName + " " + TeacherList[i].LastName).attr("id", TeacherList[i].Id);
+
+                        $("#teacherFilter").append($option);
+                    }
+
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function FilterTeachers() {
+
+            $('#calendar').fullCalendar('removeEvents');
+
+
+            if ($("#teacherFilter option:selected").val() == "בחר") {
+                GetAllEventsForASchool();
+            }//if
+            else
+                GetAllEventsForATeacher();
+        }
+
+        function AskDelete() {
+            $("#SureDelete").modal();
+        }
+
+        function DeleteEvent() {
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/DeleteLesson",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ eventId: calendarEvent.EventCode }),
+                type: "POST",
+                success: function () {
+                    location.reload(true);
+                }
+            });
+        }
+
+    </script>
+
+</head>
+<body>
+    <nav class="navbar navbar-toggleable-md navbar-inverse bg-inverse fixed-top">
+        <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <a class="navbar-brand" href="adminHomePage.html" data-toggle="tooltip" title="דף הבית">
+            <img id="logo" src="images/EZDrive.png" />
+        </a>
+        <a class="navbar-brand" href="https://www.facebook.com/EZDrive-1357166781017888/" data-toggle="tooltip" title="לפייסבוק האפליקציה">
+            <i class="fa fa-facebook-official" style="color:white"></i>
+        </a>
+        <div class="collapse navbar-collapse" id="navbarsExampleDefault">
+
+            <div id="userInfoPanel" onclick="ShowPersonalInfoModal()" data-toggle="tooltip" data-placement="bottom" title="לחץ כאן לפרופיל">
+                <img id="user-image">
+                <span id="userFullName"></span>
+            </div>
+
+            <ul class="navbar-nav mr-auto">
+                <li class="nav-item active ">
+                    <a class="nav-link" href="adminHomePage.html"><i class="fa fa-home"></i> דף הבית <span class="sr-only">(current)</span></a>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="http://example.com" id="dropdown01" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa fa-user"></i> מורים</a>
+                    <div class="dropdown-menu" aria-labelledby="dropdown01">
+                        <a class="dropdown-item" href="addNewTeacher.html"><i class="fa fa-plus"></i> מורה חדש</a>
+                        <a class="dropdown-item" href="allTeachers.html"><i class="fa fa-users"></i> כל המורים</a>
+                    </div>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="http://example.com" id="dropdown01" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa fa-car"></i> רכבים</a>
+                    <div class="dropdown-menu" aria-labelledby="dropdown01">
+                        <a class="dropdown-item" href="addNewCar.html"><i class="fa fa-plus"></i> רכב חדש</a>
+                        <a class="dropdown-item" href="allCars.html"><i class="fa fa-sitemap"></i> כל הרכבים</a>
+                        <a class="dropdown-item" href="addNewCarModel.html"><i class="fa fa-tag"></i> דגם חדש</a>
+                    </div>
+                </li>
+                <li>
+                    <a class="nav-link" href="studentsPendingForOK_ADMIN.html"><i id="pending" class="fa fa-envelope-open-o"></i> הודעות</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="settings.html"><i class="fa fa-cog fa-spin"></i> הגדרות</a>
+                </li>
+                <li class="nav-item">
+                    <i class="fa fa-microphone" id="recIcon" onclick="VoiceCommand()"></i>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <br /><br /><br /><br />
+
+    <div id="filters">
+        סנן לפי מורה
+        <select id="teacherFilter" onchange="FilterTeachers()"></select>
+    </div>
+
+    <div id="calendar"></div>
+
+    <!-- Modals -->
+
+    <div id="ShowPersonalInfo" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">פרטים אישיים</h4>
+                </div>
+                <div class="modal-body">
+                    <p id="popupFirstName"></p>
+                    <p id="popupLastName"></p>
+                    <p id="popupRegisterDate"></p>
+                    <p id="popupSchool"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal" onclick="GoToEdit()">עריכת פרטים</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal" onclick="LogOut()">התנתקות</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="LessonDetailes" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">פרטי שיעור</h4>
+                </div>
+                <div class="modal-body">
+                    <p id="editTitle"></p>
+                    <p id="editStudent"></p>
+                    <p id="editDate"></p>
+                    <p id="editTime"></p>
+                    <p id="editPlace"></p>
+                    <p id="editRequest"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal">סגירה</button>
+                    <button type="button" class="btn btn-danger" id="btn_cancelLesson" data-dismiss="modal" onclick="AskDelete()">ביטול השיעור</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="SureDelete" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">?בטוח למחוק</h4>
+                </div>
+                <div class="modal-body">
+                    <p>האם ברצונך לבטל את השיעור המבוקש?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal" onclick="DeleteEvent()">כן</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal">לא</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

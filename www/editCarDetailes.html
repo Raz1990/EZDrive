@@ -1,0 +1,706 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <meta charset="utf-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link href="bootstrap-4.0.0-alpha.6-dist/css/bootstrap.min.css" rel="stylesheet" />
+    <script src="lib/jquery-1.11.3.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
+    <script src="bootstrap-4.0.0-alpha.6-dist/js/bootstrap.min.js"></script>
+
+    <script src="fullcalendar-3.2.0/lib/moment.min.js"></script>
+
+    <script src="ExtraJS/mobileChecker.js"></script>
+    <script src="ExtraJS/master.js"></script>
+    <link href="Styles/NavBarStyle.css" rel="stylesheet" />
+    <link href="Styles/NeedRightSuperStyle.css" rel="stylesheet" />
+    <link href="Styles/EveryPageStyle.css" rel="stylesheet" />
+
+    <link href="Styles/carTables.css" rel="stylesheet" />
+    <link href="lib/font-awesome-4.7.0/css/font-awesome.min.css" rel="stylesheet" />
+
+    <script>
+
+        items = 5;
+        progress = 0
+        progressText = 0;
+
+        $(document).ready(function () {
+            currentUser = GENERAL.USER.getUserInfo();
+            //if coming here without logging in first
+            if (currentUser == null || (currentUser.type != "admin" && currentUser.type != "teacher")) {
+                GENERAL.USER.logOutUser();
+                location.href = "loginPage.html";
+                return;
+            }
+
+            searchForPending();
+
+            //fill the personal info modal with info
+            fillPersonalInfoModal();
+
+            //if NOT on mobile
+            if (!jQuery.browser.mobile) {
+                //hide the image div requiring mobile elements
+                $("#carPictureDiv").hide();
+                //hide the microphone options
+                $("#recIcon").hide();
+            }
+
+            GetAllTeachers();
+
+            ImportInfo();
+        });
+
+        function searchForPending() {
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetAllPendingRequestsForATeacher",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ teacherid: currentUser.id }),
+                type: "POST",
+                success: function (res) {
+                    requestList = JSON.parse(res.d);
+
+                    if (requestList.length > 0) {
+                        $("#pending").removeClass("fa fa-envelope-open-o").addClass("fa fa-envelope").append(requestList.length);
+                    }
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function VoiceCommand() {
+            //window.plugins.speechRecognition.isRecognitionAvailable(
+            //    function (e) {
+            //        alert('isRecognitionAvailable:' + e);
+            //    },
+            //    function (e) {
+            //        alert('error' + e);
+            //    }
+            //);
+
+            window.plugins.speechRecognition.requestPermission(
+              function (e)
+              { },
+              function (e) {
+                  return;
+              })
+
+            var options = {
+                language: "he",
+                matches: 1,
+                prompt: "מאזין",      // Android only
+                showPopup: true,  // Android only
+                showPartial: false // iOS only
+            }
+
+            window.plugins.speechRecognition.startListening(
+                function (e) {
+                    //if it's a common phrase and was dealt with in the master.js file
+                    if (VoiceCommands(e)) {
+                        return;
+                    }
+                },
+                function (e) {
+                    alert('error' + e);
+                },
+                options);
+        }
+
+        function ImportInfo()
+        {
+            currentCar = GENERAL.CAR.getCarInfo();
+
+            $("#carImage").attr("src", currentCar.ImgLocation);
+            $("#permaID").text(currentCar.LicenseNumber);
+            
+            $("#teachers").val(currentCar.User.FirstName + " "+ currentCar.User.LastName);
+            $("#teachers option:selected").attr("id", currentCar.User.Id);
+            $("#teachers").focus();
+            $("#insurance").val(moment(currentCar.InsuranceDate).format("YYYY-MM-DD")).focus();
+            $("#RishuyCar").val(moment(currentCar.LicenseDate).format("YYYY-MM-DD")).focus();
+            $("#Tipul").val(moment(currentCar.LastTipul).format("YYYY-MM-DD")).focus();
+            $("#inputKM").val(currentCar.Km).focus();
+
+            GENERAL.CAR.setCarInfo(null);
+
+        }
+
+        function fillPersonalInfoModal() {
+            $(".popupFirstName").text("שם פרטי: " + currentUser.firstName);
+            $(".popupLastName").text("שם משפחה: " + currentUser.lastName);
+            $(".popupRegisterDate").text("תאריך הצטרפות: " + currentUser.register);
+
+            school = GENERAL.ADMIN.getAdminSchool();
+
+            if (currentUser.type == "admin") {
+                $("#popupSchool").text("מנהל בית ספר: " + school.Name).attr("id", school.Code);
+
+                $("#teacherNAV").remove();
+            }
+            else if (currentUser.type == "teacher") {
+                $("#adminNAV").remove();
+            }
+
+            //set the info panel with the user info
+            $("#user-image").attr("src", currentUser.image)
+            $("#userFullName").text(GENERAL.USER.getUserFullName());
+
+        }
+
+        function ShowPersonalInfoModal() {
+            if (currentUser.type == "admin")
+                $("#ShowAdminInfo").modal();
+            else
+                $("#ShowTeacherInfo").modal();
+        }
+
+        function GetAllTeachers() {
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetAllTeachersInSchool",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ schoolId: school.Code, past:false }),
+                type: "POST",
+                success: function (res) {
+
+                    teacherList = JSON.parse(res.d);
+
+                    for (var i in teacherList) {
+                        var $option = $("<option>").html(teacherList[i].FirstName + " " + teacherList[i].LastName).attr("id", teacherList[i].Id);
+
+                        $("#teachers").append($option);
+
+                        if (currentUser.type == "teacher" && currentUser.id == teacherList[i].Id) {
+                            $("#teachers").val(teacherList[i].FirstName + " " + teacherList[i].LastName).attr("disabled", "true");
+                            CheckTeacher($("#teachers")[0]);
+                        }
+
+                    }
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        //VALIDATION FUNCTIONS
+
+        function CheckTeacher(obj) {
+            try {
+                var input = obj.value;
+                if (input == "בחר") throw "יש לבחור מורה מהרשימה";
+            } catch (e) {
+                $("#LBLerrorTEACHER").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorTEACHER").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function CheckRishuy(obj) {
+            try {
+                var input = obj.value;
+                if (input == "") throw "אין להשאיר שדה זה ריק";
+                if (isNaN(input)) throw "שדה זה מחייב מספר";
+                if (input < 1000000) throw "חובה מספר בעל 7 ספרות";
+                if (input > 9999999) throw "חובה מספר בעל 7 ספרות";
+            } catch (e) {
+                $("#LBLerrorRishuy").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorRishuy").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function CheckKM(obj) {
+            try {
+                var input = obj.value;
+                if (input == "") throw "אין להשאיר שדה זה ריק";
+                if (isNaN(input)) throw "שדה זה מחייב מספר";
+            } catch (e) {
+                $("#LBLerrorKM").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorKM").text("");
+            ChangeProgress(obj, true);
+        }
+
+        //VALIDATION FUNCTIONS END
+
+        //to change the progress bar
+        function ChangeProgress(obj, raise) {
+
+            var $input = $("#" + obj.id);
+
+            //if its the first time filling the field
+            //the "notdone" class is to make sure we don't update progress
+            //to a field that's just being edited
+            if ($input.parent().parent().hasClass("notdone")) {
+                if (raise) {
+                    progress += parseFloat((100 / items));
+                    progressText = progress.toFixed();
+                    $input.parent().parent().addClass("done");
+                    $input.parent().parent().removeClass("notdone");
+                    $input.parent().parent().css("background", "aqua");
+                }
+                else
+                    $input.parent().parent().css("background", "lightsalmon");
+            }
+            else {
+                if (!raise) {
+                    $input.parent().parent().removeClass("done");
+                    $input.parent().parent().addClass("notdone");
+                    $input.parent().parent().css("background", "lightsalmon");
+                    progress -= parseFloat(100 / items);
+                    progressText = progress.toFixed();
+                }
+            }
+
+            $("#bar").css("width", progress + "%");
+            $("#bar").text(progressText + "%");
+        }
+
+        function UpdateCar() {
+
+            $(".done").css("background", "");
+
+            //if the progress (info supplied) is not 100% completed, alert and abort
+            if ($("#bar").text() != "100%") {
+                $("#NoInfo").modal();
+                $(".notdone").css("background", "lightcoral");
+                return;
+            }
+
+            var newCar = {
+                Teacher: $("#teachers option:selected").attr("id"),
+                Rishuy: $("#permaID").text(), //מספר רישוי
+                Insurance: moment($("#insurance").val()).format("DD/MM/YYYY"), //תוקף ביטוח
+                RishuyCar: moment($("#RishuyCar").val()).format("DD/MM/YYYY"), //תוקף רישיון רכב
+                Tipul: moment($("#Tipul").val()).format("DD/MM/YYYY"), //תאריך טיפול אחרון
+                KM: $("#inputKM").val(),
+                Img: "car_" + $("#permaID").text() + $("#teachers option:selected").attr("id")
+            }
+
+            //upload the image file to the server
+            //if (jQuery.browser.mobile) {
+            //    uploadPhoto(newCar);
+            //}
+
+            newCar.Img = GENERAL.PICTURE.path + "car_" + $("#permaID").text() + $("#teachers option:selected").attr("id") + ".jpg"
+
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/UpdateCar",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({teacherId: newCar.Teacher, insuranceDate: newCar.Insurance, licenseDate: newCar.RishuyCar, lastTipul: newCar.Tipul, licenseNumber: newCar.Rishuy, img: newCar.Img, km: newCar.KM }),
+                type: "POST",
+                success: function () {
+                    $("#AddedOK").modal();
+                },
+                error: function (e) {
+                    alert("error CreateNewStudent " + e.responseText);
+                }
+            });
+        }
+
+        function capturePhoto() {
+            // Take picture using device camera and retrieve image as base64-encoded string
+            navigator.camera.getPicture(onCameraSuccess, onFail, {
+                quality: 50,
+                targetWidth: 300,
+                targetHeight: 300,
+                destinationType: Camera.DestinationType.FILE_URI,
+                correctOrientation: true
+            });
+        }
+
+        // To select image from gallery
+        function getPhoto(source) {
+            // Retrieve image file location from specified source
+            navigator.camera.getPicture(onCameraSuccess, onFail, {
+                quality: 50,
+                destinationType: navigator.camera.DestinationType.FILE_URI,
+                targetWidth: 300,
+                targetHeight: 300,
+                sourceType: navigator.camera.PictureSourceType.PHOTOLIBRARY
+            });
+        }
+
+        function onFail() {
+
+        }
+
+        function onCameraSuccess(imageURI) {
+            // Show the captured photo
+            $('#carImage').attr("src", imageURI);
+        }
+
+        function uploadPhoto(newCar) {
+
+            imageURI = $('#carImage').attr("src");
+            picName = newCar.Img;
+
+            var options = new FileUploadOptions(); // PhoneGap object to allow server upload
+            options.fileKey = "file";
+            options.fileName = picName; // file name
+            options.mimeType = "image/jpeg"; // file type
+            var params = {}; // Optional parameters
+            params.value1 = "test";
+            params.value2 = "param";
+
+            options.params = params; // add parameters to the FileUploadOptions object
+            var ft = new FileTransfer();
+            ft.upload(imageURI, encodeURI(GENERAL.uploadFileAddress), win, fail, options); // Upload
+        } // Upload Photo
+
+        function win(r) {
+            var path = r.response;
+        } // win (upload success)
+
+        function fail(error) {
+            alert("An error has occurred: Code = " + error.code);
+        }
+
+        function reload() {
+            location.reload(true);
+        }
+
+        function LogOut() {
+            Hitnatkut();
+        }
+
+        function GoToEdit() {
+            location.href = "editUserDetailes.html";
+        }
+
+        function GoBack()
+        {
+            if (currentUser.type == "admin") {
+                location.href= "allCars.html";
+            }
+            else
+                location.href = "teacherCars.html";
+        }
+
+    </script>
+
+</head>
+<body>
+
+    <div id="adminNAV">
+        <nav class="navbar navbar-toggleable-md navbar-inverse bg-inverse fixed-top">
+            <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <a class="navbar-brand" href="adminHomePage.html" data-toggle="tooltip" title="דף הבית">
+                <img id="logo" src="images/EZDrive.png" />
+            </a>
+            <a class="navbar-brand" href="https://www.facebook.com/EZDrive-1357166781017888/" data-toggle="tooltip" title="לפייסבוק האפליקציה">
+                <i class="fa fa-facebook-official" style="color:white"></i>
+            </a>
+            <div class="collapse navbar-collapse" id="navbarsExampleDefault">
+
+                <div id="userInfoPanel" onclick="ShowPersonalInfoModal()" data-toggle="tooltip" data-placement="bottom" title="לחץ כאן לפרופיל">
+                    <img id="user-image">
+                    <span id="userFullName"></span>
+                </div>
+
+                <ul class="navbar-nav mr-auto">
+                    <li class="nav-item active ">
+                        <a class="nav-link" href="adminHomePage.html"><i class="fa fa-home"></i> דף הבית <span class="sr-only">(current)</span></a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="http://example.com" id="dropdown01" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa fa-user"></i> מורים</a>
+                        <div class="dropdown-menu" aria-labelledby="dropdown01">
+                            <a class="dropdown-item" href="addNewTeacher.html"><i class="fa fa-plus"></i> מורה חדש</a>
+                            <a class="dropdown-item" href="allTeachers.html"><i class="fa fa-users"></i> כל המורים</a>
+                        </div>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle active" href="http://example.com" id="dropdown01" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa fa-car"></i> רכבים</a>
+                        <div class="dropdown-menu" aria-labelledby="dropdown01">
+                            <a class="dropdown-item" href="addNewCar.html"><i class="fa fa-plus"></i> רכב חדש</a>
+                            <a class="dropdown-item" href="allCars.html"><i class="fa fa-sitemap"></i> כל הרכבים</a>
+                            <a class="dropdown-item" href="addNewCarModel.html"><i class="fa fa-tag"></i> דגם חדש</a>
+                        </div>
+                    </li>
+                    <li>
+                        <a class="nav-link" href="studentsPendingForOK_ADMIN.html"><i id="pending" class="fa fa-envelope-open-o"></i> הודעות</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="settings.html"><i class="fa fa-cog fa-spin"></i> הגדרות</a>
+                    </li>
+                    <li class="nav-item">
+                        <i class="fa fa-microphone" id="recIcon" onclick="VoiceCommand()"></i>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+    </div>
+
+    <div id="teacherNAV">
+        <nav class="navbar navbar-toggleable-md navbar-inverse bg-inverse fixed-top">
+            <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <a class="navbar-brand" href="teacherCalendar.html" data-toggle="tooltip" title="דף הבית">
+                <img id="logo" src="images/EZDrive.png" />
+            </a>
+            <a class="navbar-brand" href="https://www.facebook.com/EZDrive-1357166781017888/" data-toggle="tooltip" title="לפייסבוק האפליקציה">
+                <i class="fa fa-facebook-official" style="color:white"></i>
+            </a>
+            <div class="collapse navbar-collapse" id="navbarsExampleDefault">
+
+                <div id="userInfoPanel" onclick="ShowPersonalInfoModal()" data-toggle="tooltip" data-placement="bottom" title="לחץ כאן לפרופיל">
+                    <img id="user-image">
+                    <span id="userFullName"></span>
+                </div>
+
+                <ul class="navbar-nav mr-auto">
+                    <li>
+                        <a class="nav-link" href="teacherCalendar.html"><i class="fa fa-calendar"></i> לוח זמנים <span class="sr-only">(current)</span></a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="http://example.com" id="dropdown01" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa fa-users"></i> תלמידים</a>
+                        <div class="dropdown-menu" aria-labelledby="dropdown01">
+                            <a class="dropdown-item" href="teacherAllStudents.html"><i class="fa fa-users"></i> כל התלמידים</a>
+                            <a class="dropdown-item" href="teacherProgress.html"><i class="fa fa-percent"></i> התקדמות תלמידים</a>
+                            <a class="dropdown-item" href="teacherRequests.html"><i class="fa fa-comment-o"></i> בקשות אישיות</a>
+                            <a class="dropdown-item" href="teacherGreenForm.html"><i class="fa fa-files-o"></i> פרטי טופס ירוק</a>
+                        </div>
+                    </li>
+                    <li>
+                        <a class="nav-link" href="studentsPendingForOK.html"><i id="pending" class="fa fa-envelope-open-o"></i> הודעות</a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle active" href="http://example.com" id="dropdown01" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa fa-car"></i> רכבים</a>
+                        <div class="dropdown-menu" aria-labelledby="dropdown01">
+                            <a class="dropdown-item" href="teacherCars.html"><i class="fa fa-sitemap"></i> הרכבים שלי</a>
+                            <a class="dropdown-item nav-item active" href="addNewCar.html"><i class="fa fa-plus"></i> רכב חדש</a>
+                        </div>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="settings.html"><i class="fa fa-cog fa-spin"></i> הגדרות</a>
+                    </li>
+                    <li class="nav-item">
+                        <i class="fa fa-microphone" id="recIcon" onclick="VoiceCommand()"></i>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+    </div>
+
+    <br /><br /><br /><br />
+
+    <div dir="rtl" style="margin-top:1%">
+
+        <h2>עדכן פרטי רכב ולחץ על "עדכן רכב"</h2>
+
+        <br />
+        <div class="progress" dir="rtl" style="border:solid">
+            <div id="bar" class="progress-bar" role="progressbar" aria-valuenow="70"
+                 aria-valuemin="0" aria-valuemax="100" style="width:0%">
+                0%
+            </div>
+        </div>
+        <br /><br />
+
+        <div id="CarInfo">
+
+            <form class="form-horizontal">
+
+                <div class="form-group" id="carPictureDiv">
+                    <label class="col-sm-2 control-label">תמונת הרכב</label>
+                    <br />
+
+                    <label onclick="capturePhoto()"><i class="fa fa-camera"></i> מצלמה</label>
+                    &nbsp;&nbsp;&nbsp;
+                    <label onclick="getPhoto()"><i class="fa fa-picture-o"></i> גלריה</label>
+
+                </div>
+
+                <br />
+                <img id="carImage" />
+
+                <div class="form-group">
+                    <label class="col-sm-2 control-label">מספר רישוי</label>
+                    <div class="col-sm-2">
+                        <label class="col-form-label font-weight-bold" id="permaID"></label>
+                    </div>
+                </div>
+
+                <div class="form-group notdone">
+                    <label>שייכת למורה</label>
+                    <div>
+                        <select id="teachers" required autofocus onblur="CheckTeacher(this)">
+                            <option>בחר</option>
+                        </select>
+                    </div>
+                    <label id="LBLerrorTEACHER"></label>
+                </div>
+
+                <!--7-->
+                <div class="form-group notdone">
+                    <label>תאריך תום תוקף ביטוח</label>
+                    <div class="col-sm-2">
+                        <input type="date" class="form-control" id="insurance" required autofocus onblur="ChangeProgress(this, true)">
+                    </div>
+                    <label id="LBLerrorINSURANCE"></label>
+                </div>
+
+                <!--8-->
+                <div class="form-group notdone">
+                    <label>תאריך תום תוקף רישיון הרכב</label>
+                    <div class="col-sm-2">
+                        <input type="date" class="form-control" id="RishuyCar" required autofocus onblur="ChangeProgress(this, true)">
+                    </div>
+                    <label id="LBLerrorRishuyCar"></label>
+                </div>
+
+                <!--9-->
+                <div class="form-group notdone">
+                    <label>טיפול אחרון</label>
+                    <div class="col-sm-2">
+                        <input type="date" class="form-control" id="Tipul" required autofocus onblur="ChangeProgress(this,true)">
+                    </div>
+                    <label id="LBLerrorTipul"></label>
+                </div>
+
+                <!--10-->
+                <div class="form-group notdone">
+                    <label class="col-sm-2 control-label">קילומטראז'</label>
+                    <div class="col-sm-3">
+                        <input class="form-control" id="inputKM" type="text" placeholder="קילומטראז'" required autofocus onblur="CheckKM(this)">
+                    </div>
+                    <label id="LBLerrorKM"></label>
+                </div>
+
+            </form>
+
+        </div>
+
+        <br /><br /><br />
+
+        <!-- Trigger the modal with a button -->
+        <button type="button" id="signUpStartUp" class="btn btn-info btn-lg" data-toggle="modal" data-target="#Confirm">עדכן רכב</button>
+    </div>
+    <!-- Modal -->
+
+    <div id="ShowTeacherInfo" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">פרטים אישיים</h4>
+                </div>
+                <div class="modal-body">
+                    <p class="popupFirstName"></p>
+                    <p class="popupLastName"></p>
+                    <p class="popupRegisterDate"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal" onclick="GoToEdit()">עריכת פרטים</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal" onclick="LogOut()">התנתקות</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="ShowAdminInfo" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">פרטים אישיים</h4>
+                </div>
+                <div class="modal-body">
+                    <p class="popupFirstName"></p>
+                    <p class="popupLastName"></p>
+                    <p class="popupRegisterDate"></p>
+                    <p id="popupSchool"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal" onclick="GoToEdit()">עריכת פרטים</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal" onclick="LogOut()">התנתקות</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="Confirm" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">אישור פרטים</h4>
+                </div>
+                <div class="modal-body">
+                    <p>האם כל הפרטים הנ''ל נכונים?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success  media-body" data-dismiss="modal" onclick="UpdateCar()">אישור</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal">ביטול</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="NoInfo" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">לא הוזנו כל הפרטים</h4>
+                </div>
+                <div class="modal-body">
+                    <p>אין להשאיר שדות ריקים</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal">הבנתי</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="AddedOK" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">רכב עודכן בהצלחה</h4>
+                </div>
+                <div class="modal-body">
+                    <p>פרטי הרכב עודכנו במערכת בהצלחה.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal" onclick="GoBack()">סיום</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

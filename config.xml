@@ -1,0 +1,44 @@
+﻿<widget xmlns="http://www.w3.org/ns/widgets" xmlns:gap="http://phonegap.com/ns/1.0" id="com.phonegap.helloworld" version="1.0.0">
+
+  <name>EZDrive</name>
+  <description>The first online driving lessons co-ordinator</description>
+  <icon src="/images/splash.png"/>
+  
+  <gap:plugin name="phonegap-plugin-push" source="npm" spec="1.7.2">
+    <param name="SENDER_ID" value="554906213045" />
+  </gap:plugin>
+
+  <plugin name="cordova-plugin-splashscreen" spec="~4.0.0" />
+
+  <plugin name="cordova-plugin-camera" source="npm"/>
+
+  <plugin name="cordova-plugin-media" source="npm" />
+
+  <plugin name="cordova-plugin-network-information" source="npm" />
+
+  <plugin name="cordova-plugin-contacts" source="npm" />
+
+  <plugin name="cordova-plugin-file-transfer" spec="~1.6.0" />
+  <plugin name="cordova-plugin-whitelist" source="npm" />
+  <plugin name="cordova-plugin-speechrecognition" spec="~1.1.1" />
+
+  <access origin="*"/>
+  <allow-intent href="http://*/*"/>
+  <allow-intent href="https://*/*"/>
+  <allow-intent href="tel:*"/>
+  <allow-intent href="sms:*"/>
+  <allow-intent href="mailto:*"/>
+  <allow-intent href="geo:*"/>
+  <platform name="android">
+    <allow-intent href="market:*"/>
+  </platform>
+  <platform name="ios">
+    <allow-intent href="itms:*"/>
+    <allow-intent href="itms-apps:*"/>
+  </platform>
+
+
+  <gap:splash src="/images/splash.png"  gap:platform="ios"  width="320" height="480" />
+  <gap:splash src="/images/splash.png"  gap:platform="android" gap:density="mdpi" />
+
+</widget>

@@ -1,0 +1,376 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <meta charset="utf-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link href="bootstrap-4.0.0-alpha.6-dist/css/bootstrap.min.css" rel="stylesheet" />
+    <script src="lib/jquery-1.11.3.min.js"></script>
+
+    <script src="fullcalendar-3.2.0/lib/moment.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
+    <script src="bootstrap-4.0.0-alpha.6-dist/js/bootstrap.min.js"></script>
+
+    <script src="ExtraJS/mobileChecker.js"></script>
+    <script src="ExtraJS/master.js"></script>
+    <link href="Styles/NavBarStyle.css" rel="stylesheet" />
+    <link href="Styles/NeedRightSuperStyle.css" rel="stylesheet" />
+    <link href="Styles/EveryPageStyle.css" rel="stylesheet" />
+
+    <link href="lib/font-awesome-4.7.0/css/font-awesome.min.css" rel="stylesheet" />
+
+    <style>
+
+        #content{
+            margin-top:2%;
+        }
+
+        #greenArea{
+            text-align:center;
+        }
+
+        #greenForm{
+            height:200px;
+            width:100px;
+            cursor:pointer;
+        }
+
+        #last{
+            color:indianred;
+            font:bold 24px large;
+        }
+
+        #greenFormL{
+            /*height:500px;
+            width:300px;*/
+        }
+
+
+    </style>
+
+    <script>
+
+        teacher = null;
+        currentUser = null;
+        EventCode = 0;
+
+        $(document).ready(function () {
+
+            currentUser = GENERAL.USER.getUserInfo();
+            //if coming here without logging in first
+            if (currentUser == null || currentUser.type != "student") {
+                location.href = "loginPage.html";
+                return;
+            }
+
+            //if NOT on mobile
+            if (!jQuery.browser.mobile) {
+                //hide the microphone options
+                $("#recIcon").hide();
+            }
+
+            //set the info panel with the user info
+            $("#user-image").attr("src", currentUser.image)
+            $("#userFullName").text(GENERAL.USER.getUserFullName());
+
+            //if there is no current teacher stored
+            if (GENERAL.STUDENT.getStudentTeacher() == null) {
+                $.ajax({
+
+                    dataType: "json",
+                    url: GENERAL.webServerAddress + "/GetTeacherOverStudent",
+                    contentType: "application/json; charset=utf-8",
+                    data: JSON.stringify({ studentID: currentUser.id }),
+                    type: "POST",
+                    async: false,
+                    success: function (res) {
+                        teacher = JSON.parse(res.d);
+                        GENERAL.STUDENT.setStudentTeacher(teacher);
+                    },
+                    error: function (e) {
+                        alert("error " + e.responseText);
+                    }
+                });
+            }
+            else {
+                teacher = GENERAL.STUDENT.getStudentTeacher();
+            }
+
+            //fill the personal info modal with info
+            fillPersonalInfoModal();
+
+            Import();
+
+        }); //document ready
+
+        function VoiceCommand() {
+            //window.plugins.speechRecognition.isRecognitionAvailable(
+            //    function (e) {
+            //        alert('isRecognitionAvailable:' + e);
+            //    },
+            //    function (e) {
+            //        alert('error' + e);
+            //    }
+            //);
+
+            window.plugins.speechRecognition.requestPermission(
+              function (e)
+              { },
+              function (e) {
+                  return;
+              })
+
+            var options = {
+                language: "he",
+                matches: 1,
+                prompt: "מאזין",      // Android only
+                showPopup: true,  // Android only
+                showPartial: false // iOS only
+            }
+
+            window.plugins.speechRecognition.startListening(
+                function (e) {
+                    //if it's a common phrase and was dealt with in the master.js file
+                    if (VoiceCommands(e)) {
+                        return;
+                    }
+                },
+                function (e) {
+                    alert('error' + e);
+                },
+                options);
+        }
+
+        function Import()
+        {
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetGreenForm",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ id: currentUser.id}),
+                type: "POST",
+                success: function (res) {
+
+                    greenForm = JSON.parse(res.d);
+                    $("#green").val(moment(greenForm.ProductionDate).format("YYYY-MM-DD")).attr("data-date", greenForm.ProductionDate);
+                    $("#doctor").val(moment(greenForm.Doctor).format("YYYY-MM-DD")).attr("data-date", greenForm.Doctor);
+                    $("#eyes").val(moment(greenForm.Eyes).format("YYYY-MM-DD")).attr("data-date", greenForm.Eyes);
+                    $("#theory").val(moment(greenForm.Theory).format("YYYY-MM-DD")).attr("data-date", greenForm.Theory);
+                    $("#greenForm").attr("src", greenForm.Img);
+                    $("#greenFormL").attr("src", greenForm.Img);
+
+                    dates_arr = [greenForm.ProductionDate, greenForm.Doctor, greenForm.Eyes, greenForm.Theory]
+
+                    dates_arr.sort();
+
+                    for (i = 0; i < dates_arr.length; i++) {
+                        if (dates_arr[i] != "")
+                            break;
+                    }
+
+                    $("#last").text(dates_arr[i]);
+
+                    //$('#form').find('input').each(function () {
+                    //    if ($(this).attr("data-date") != "") {
+                    //        $(this).replaceWith("<label id='"+$(this).attr("id")+"'>" + $(this).attr("data-date") + "</label>");
+                    //    }
+                        
+                    //});
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function Update() {
+            prod = $("#green").val();
+            doc = $("#doctor").val();
+            eye = $("#eyes").val();
+            theory = $("#theory").val();
+            img = $("#greenForm").attr("src");
+
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/UpdateGreenForm",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ id: currentUser.id, produce: prod , doctor: doc, eyes: eye, theory: theory, img: img }),
+                type: "POST",
+                async: false,
+                success: function () {
+                    location.reload(true);
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function fillPersonalInfoModal() {
+            $("#popupFirstName").text("שם פרטי: " + currentUser.firstName);
+            $("#popupLastName").text("שם משפחה: " + currentUser.lastName);
+            $("#popupRegisterDate").text("תאריך הצטרפות: " + currentUser.register);
+
+            $("#popupTeacherName").text("מורה מלמד: " + teacher.FirstName + " " + teacher.LastName);
+
+        }
+
+        function ShowPersonalInfoModal() {
+            $("#ShowPersonalInfo").modal();
+        }
+
+        function ShowGreenForm() {
+            $("#ShowGreenForm").modal();
+        }
+
+        function LogOut() {
+            Hitnatkut();
+        }
+
+        function GoToEdit() {
+            location.href = "editUserDetailes.html";
+        }
+
+    </script>
+
+</head>
+<body>
+    <nav class="navbar navbar-toggleable-md navbar-inverse bg-inverse fixed-top">
+        <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <a class="navbar-brand" href="studentCalendar.html" data-toggle="tooltip" title="דף הבית">
+            <img id="logo" src="images/EZDrive.png" />
+        </a>
+        <a class="navbar-brand" href="https://www.facebook.com/EZDrive-1357166781017888/" data-toggle="tooltip" title="לפייסבוק האפליקציה">
+            <i class="fa fa-facebook-official" style="color:white"></i>
+        </a>
+        <div class="collapse navbar-collapse" id="navbarsExampleDefault">
+
+            <div id="userInfoPanel" onclick="ShowPersonalInfoModal()" data-toggle="tooltip" data-placement="bottom" title="לחץ כאן לפרופיל">
+                <img id="user-image">
+                <span id="userFullName"></span>
+            </div>
+
+            <ul class="navbar-nav mr-auto">
+                <li>
+                    <a class="nav-link" href="studentCalendar.html"><i class="fa fa-calendar"></i> לוח זמנים <span class="sr-only">(current)</span></a>
+                </li>
+                <li>
+                    <a class="nav-link" href="studentProgress.html"><i class="fa fa-percent"></i> התקדמות</a>
+                </li>
+                <li>
+                    <a class="nav-link nav-item active " href="studentGreenForm.html"><i class="fa fa-file-o"></i> טופס ירוק</a>
+                </li>
+                <li>
+                    <a class="nav-link" href="studentRequest.html"><i class="fa fa-comment-o"></i> בקשות אישיות</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="settings.html"><i class="fa fa-cog fa-spin"></i> הגדרות</a>
+                </li>
+                <li class="nav-item">
+                    <i class="fa fa-microphone" id="recIcon" onclick="VoiceCommand()"></i>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <br /><br /><br /><br />
+
+    <div dir="rtl" id="content">
+
+        <form class="form-horizontal" id="form">
+
+            <div class="form-group">
+                <label>תאריך הנפקת טופס ירוק</label>
+                <div class="col-sm-2">
+                    <input type="date" class="form-control" id="green" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>תאריך בדיקת רופא משפחה</label>
+                <div class="col-sm-2">
+                    <input type="date" class="form-control" id="doctor" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>תאריך בדיקת עיניים</label>
+                <div class="col-sm-2">
+                    <input type="date" class="form-control" id="eyes" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>תאריך מעבר תיאוריה</label>
+                <div class="col-sm-2">
+                    <input type="date" class="form-control" id="theory" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>תאריך אחרון לתוקף</label>
+                <div class="col-sm-2">
+                    <label id="last"></label>
+                </div>
+            </div>
+
+            <div id="greenArea">
+
+                <h3>סריקת הטופס</h3> 
+
+                <img id="greenForm" onclick="ShowGreenForm()" />
+            </div>
+        </form>
+
+        <br />
+        <!-- Trigger the modal with a button -->
+        <button type="button" id="signUpStartUp" class="btn btn-info btn-lg" onclick="Update()">עדכן נתונים</button>
+
+    </div>
+    <!-- Modals -->
+
+    <div id="ShowPersonalInfo" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">פרטים אישיים</h4>
+                </div>
+                <div class="modal-body">
+                    <p id="popupFirstName"></p>
+                    <p id="popupLastName"></p>
+                    <p id="popupRegisterDate"></p>
+                    <p id="popupTeacherName"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal" onclick="GoToEdit()">עריכת פרטים</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal" onclick="LogOut()">התנתקות</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="ShowGreenForm" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">טופס ירוק</h4>
+                </div>
+                <img id="greenFormL"/>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

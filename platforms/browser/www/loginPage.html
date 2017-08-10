@@ -1,0 +1,340 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <meta charset="utf-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script src="lib/jquery-1.11.3.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
+
+    <link href="bootstrap-4.0.0-alpha.6-dist/css/bootstrap.min.css" rel="stylesheet" />
+    <script src="bootstrap-4.0.0-alpha.6-dist/js/bootstrap.min.js"></script>
+
+    <script src="ExtraJS/mobileChecker.js"></script>
+
+    <link href="Styles/animate.css" rel="stylesheet" />
+
+    <link href="Styles/LoginPageStyle.css" rel="stylesheet" />
+
+    <script src="ExtraJS/master.js"></script>
+
+    <script>
+
+        function getCookie(cname) {
+            var name = cname + "=";
+            var decodedCookie = decodeURIComponent(document.cookie);
+            var ca = decodedCookie.split(';');
+            for (var i = 0; i < ca.length; i++) {
+                var c = ca[i];
+                while (c.charAt(0) == ' ') {
+                    c = c.substring(1);
+                }
+                if (c.indexOf(name) == 0) {
+                    return c.substring(name.length, c.length);
+                }
+            }
+            return "";
+        }
+
+        $(document).ready(function () {
+            //if on mobile
+            if (jQuery.browser.mobile) {
+                var login = GENERAL.REMEMBER.getLogon();
+                if (login == "true") {
+                    NavigateToMainPage(GENERAL.USER.getUserInfo());
+                }
+
+                var remember = GENERAL.REMEMBER.getRemember();
+                if (remember == "true") {
+                    user = GENERAL.USER.getUserInfo();
+
+                    $("#inputID").val(user.id);
+                    $("#inputPassword").val(user.password);
+
+                    $("#rememberCheck")[0].checked = true;
+                }
+            }
+            else {
+                //if there is an auto-login cookie stored
+                var userCookie = getCookie("autoLogin");
+                if (userCookie != "") {
+                    NavigateToMainPage(GENERAL.USER.getUserInfo());
+                    return;
+                }
+
+                //if there is a remember me cookie stored
+                userCookie = getCookie("user");
+                if (userCookie != "") {
+                    user = JSON.parse(userCookie);
+
+                    $("#inputID").val(user.id);
+                    $("#inputPassword").val(user.password);
+
+                    $("#rememberCheck")[0].checked = true;
+                }
+
+            }
+
+            //make sound
+            //document.getElementById("vroom").play();
+
+        });
+
+        function NavigateToMainPage(user) {
+            if (user.type == "student") {
+                location.href = "studentCalendar.html";
+            }
+            else if (user.type == "teacher")
+                location.href = "teacherCalendar.html";
+            else
+                location.href = "adminHomePage.html";
+        }
+
+        rememberMe = false;
+        autoLogin = false;
+
+        function Remember(checkObj) {
+            rememberMe = checkObj.checked;
+        }
+
+        function AutoLogin(checkObj) {
+            autoLogin = checkObj.checked;
+            $("#rememberCheck")[0].checked = true;
+            if ($("#rememberCheck")[0].disabled) {
+                $("#rememberCheck")[0].disabled = false;
+            }
+            else
+                $("#rememberCheck")[0].disabled = true;
+            Remember($("#rememberCheck")[0]);
+        }
+
+        function PerformLogin() {
+
+            id = $("#inputID").val();
+            password = $("#inputPassword").val();
+
+            if (id < 100000000 || id > 999999999) {
+                $("#LBLerror").html("יש להכניס מספר תעודת זהות תקין");
+                return;
+            }
+            else
+                $("#LBLerror").html("");
+
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/Login",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ inputID: id, inputPassword: password }),
+                type: "POST",
+                success: function (res) {
+                    //if the message isn't a type, put the message in the error label
+                    if (res.d[0] != "student" && res.d[0] != "teacher" && res.d[0] != "admin") {
+                        $("#LBLerror").html(res.d[0]);
+                        $("#bad").text(res.d[0]);
+                        $("#ErrorMessage").modal();
+                        return;
+                    }
+
+                    //if it is a type, so a user is found
+                    //create an object of user with the data from res
+                    var user = {
+                        type: res.d[0],
+                        id: res.d[1],
+                        firstName: res.d[2],
+                        lastName: res.d[3],
+                        password: res.d[4],
+                        image: res.d[5],
+                        register: res.d[6]
+                    }
+
+                    //Using the master.js file, call a function that uses JSON
+                    //to store in the localstorage the user info
+                    GENERAL.USER.setUserInfo(user);
+
+                    //if checked to be remembered
+                    if (rememberMe) {
+                        //make a cookie with the value set as the stringified version of the UserInfo
+                        document.cookie = "user=" + GENERAL.USER.getUserInfoSTRING() + "; expires=Thu, 01 Jan 2999 00:00:00 UTC";
+                        GENERAL.REMEMBER.setRememberMe();
+                    }
+                    else {
+                        document.cookie = "user=; expires=Thu, 01 Jan 1970 00:00:00 UTC";
+                        GENERAL.REMEMBER.setForgetMe();
+                    }
+
+                    //if opting to auto-login
+                    if (autoLogin) {
+                        document.cookie = "autoLogin=true; expires=Thu, 01 Jan 2999 00:00:00 UTC";
+                        GENERAL.REMEMBER.setLogon();
+                    }
+                    else {
+                        document.cookie = "autoLogin=true; expires=Thu, 01 Jan 1990 00:00:00 UTC";
+                        GENERAL.REMEMBER.setLogoff();
+                    }
+
+                    fullName = GENERAL.USER.getUserFullName();
+
+                    $("#welcome").text("ברוך הבא, " + fullName + "!");
+
+                    //$("#WelcomeMessage").modal().fadeOut(2000);
+
+                    setTimeout(NavigateToMainPage(user), 700);
+
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function ShowRestorePasswordModal() {
+            $("#btnCopy").hide();
+            $("#restoreWORDS").text();
+            $("#restorePASS").text();
+            $("#RestorePasswordModal").modal();
+        }
+
+        //a simple mechanism for showing the password providing the ID
+        function RestorePassword() {
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/RestorePassword",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ id: $("#restoreID").val() }),
+                type: "POST",
+                success: function (res) {
+
+                    if (res.d == null) {
+                        $("#restoreWORDS").text("מספר תעודת זהות שגוי או לא מוכר במערכת");
+                        return;
+                    }
+
+                    $("#restoreWORDS").text("סיסמך היא: ");
+                    $("#restorePASS").text(res.d);
+                    $("#btnCopy").show();
+
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function CopyPassword() {
+            var $temp = $("<input>");
+            $("body").append($temp);
+            $temp.val($("#restorePASS").text()).select();
+            document.execCommand("copy");
+            $temp.remove();
+        }
+
+    </script>
+
+</head>
+<body>
+    <img src="images/EZDrive.png" class="animated bounceInLeft" />
+    <div class="container">
+
+        <form class="form-signin">
+            <h2 class="form-signin-heading">התחברות</h2>
+            <label for="inputID" class="sr-only">תעודת זהות</label>
+            <label id="LBLerror"></label>
+            <input type="text" id="inputID" class="form-control" placeholder="תעודת זהות" value="" required autofocus>
+            <label for="inputPassword" class="sr-only">סיסמה</label>
+            <input type="password" id="inputPassword" class="form-control" placeholder="סיסמה" value="" required>
+                <button type="button" class="btn btn-link passForgot" onclick="ShowRestorePasswordModal()">שכחת סיסמה?</button>
+            <button class="btn btn-lg btn-primary btn-block" type="button" onclick="PerformLogin()">התחבר</button>
+            <br />
+            <div class="checkbox">
+                <label>
+                    <input type="checkbox" id="rememberCheck" value="remember-me" on onchange="Remember(this)"> זכור אותי
+                </label>
+                <label>
+                    <input type="checkbox" id="autoLoginCheck" value="login-me" onchange="AutoLogin(this)"> התחבר אוטומטית
+                </label>
+            </div>
+            <div id="misgeret">
+                <label>
+                    <a href="addNewStudent.html" class="loginWords">אין לך משתמש? הירשם עכשיו!</a>
+                </label>
+            </div>
+        </form>
+
+    </div> <!-- /container -->
+    <audio id="vroom">
+        <source src="sounds/StartCar.mp3" type="audio/mpeg" />
+    </audio>
+    <!-- Modal -->
+    <div id="WelcomeMessage" class="modal alert-success" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">ברוך הבא</h4>
+                </div>
+                <div class="modal-body">
+                    <p id="welcome">ברוך הבא, </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal">סיום</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="RestorePasswordModal" class="modal alert-success" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">שחזור סיסמה</h4>
+                </div>
+                <div class="modal-body">
+                    <label>הזן את מספר תעודת הזהות שלך ולחץ על "שחזר סיסמה"</label>
+                    <input type="text" id="restoreID" placeholder="תעודת זהות" />
+                    <br />
+                    <span id="restoreWORDS"></span>
+                    <span id="restorePASS"></span>
+                    <br />
+                    <button id="btnCopy" onclick="CopyPassword()">העתק סיסמה</button>
+                </div>
+                <div class="modal-footer">
+                    <button id="btnPasswordBack" type="button" class="btn btn-success" onclick="RestorePassword()">שחזר סיסמה</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal">סגור</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="ErrorMessage" class="modal alert-success" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">שגיאה</h4>
+                </div>
+                <div class="modal-body">
+                    <p id="bad"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal">סגור</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,42 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Simple HTML & CSS Login Form</title>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script src="lib/jquery-1.11.3.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
+
+    <script src="ExtraJS/mobileChecker.js"></script>
+
+    <link href="Styles/animate.css" rel="stylesheet" />
+
+    <script src="ExtraJS/master.js"></script>
+
+    <link rel="stylesheet" href="Styles/StyleSheet.css">
+
+</head>
+<body>
+
+    <img src="images/EZDrive.png" class="animated bounceInLeft" />
+
+    <form method="post" action="index.html">
+        <div class="box">
+            <h1>התחברות</h1>
+            <input type="email" name="email" placeholder="תעודת זהות" onFocus="field_focus(this, 'email');" onblur="field_blur(this, 'email');" class="email" />
+
+            <input type="password" name="email" placeholder="סיסמה" onFocus="field_focus(this, 'email');" onblur="field_blur(this, 'email');" class="email" />
+
+            <div class="btn" onclick="PerformLogin()"> התחבר  </div> <!-- End Btn -->
+            <a href="addNewStudent.html">  <div id="btn2"> הירשם </div> </a>  <!-- End Btn2 -->
+
+        </div> <!-- End Box -->
+
+    </form>
+    <p>שכחת סיסמה? <u style="color:#f1c40f;"><a href="addNewStudent.html"> לחץ כאן! </a> </u></p>
+
+</body>
+</html>

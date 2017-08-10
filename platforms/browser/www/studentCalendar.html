@@ -1,0 +1,1107 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <meta charset="utf-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+
+    <link href="bootstrap-4.0.0-alpha.6-dist/css/bootstrap.min.css" rel="stylesheet" />
+
+    <script src="lib/jquery-3.1.1.min.js"></script>
+
+    <script type="text/javascript" charset="utf-8" src="cordova.js"></script>
+    <script src="Speech To Text Demo/scripts/jquery-migrate-3.0.0.min.js"></script>
+
+    <link href="fullcalendar-3.2.0/fullcalendar.css" rel="stylesheet" />
+    <script src="fullcalendar-3.2.0/lib/jquery-ui.min.js"></script>
+    <script src="fullcalendar-3.2.0/lib/jquery.min.js"></script>
+    <script src="fullcalendar-3.2.0/lib/moment.min.js"></script>
+    <script src="fullcalendar-3.2.0/fullcalendar.js"></script>
+    <script src="fullcalendar-3.2.0/locale/he.js"></script>
+
+    <script src="fullcalendar-3.2.0/jquery.ui.touch.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
+    <script src="bootstrap-4.0.0-alpha.6-dist/js/bootstrap.min.js"></script>
+
+    <script src="ExtraJS/master.js"></script>
+    <script src="ExtraJS/mobileChecker.js"></script>
+    <link href="Styles/NavBarStyle.css" rel="stylesheet" />
+    <link href="Styles/NeedRightSuperStyle.css" rel="stylesheet" />
+    <link href="Styles/EveryPageStyle.css" rel="stylesheet" />
+
+    <link href="lib/font-awesome-4.7.0/css/font-awesome.min.css" rel="stylesheet" />
+
+    <style>
+        .fc table td, .fc-event, fc-content {
+            border: solid;
+            margin-right:0px !important;
+            margin-left:0px !important;
+        }
+    </style>
+
+    <script>
+
+        var date = new Date();  // set the calendar dates based on today
+        var d = date.getDate(); // d = today's date
+        var m = date.getMonth(); // m = this month
+        var y = date.getFullYear(); // y = this year
+
+        teacher = null;
+        currentUser = null;
+        CurrentLocalEvent = null;
+        EventCode = 0;
+        reqid = 0;
+        color = "";
+
+        $(document).ready(function () {
+
+            currentUser = GENERAL.USER.getUserInfo();
+            //if coming here without logging in first
+            if (currentUser == null || currentUser.type != "student") {
+                location.href = "loginPage.html";
+                return;
+            }
+
+            //if NOT on mobile
+            if (!jQuery.browser.mobile) {
+                //hide the microphone options
+                $("#recIcon").hide();
+                $("#recQuestIcon").hide();
+            }
+
+            //set the info panel with the user info
+            $("#user-image").attr("src", currentUser.image)
+            $("#userFullName").text(GENERAL.USER.getUserFullName());
+
+            //if there is no current teacher stored
+            if (GENERAL.STUDENT.getStudentTeacher() == null) {
+                $.ajax({
+
+                    dataType: "json",
+                    url: GENERAL.webServerAddress + "/GetTeacherOverStudent",
+                    contentType: "application/json; charset=utf-8",
+                    data: JSON.stringify({ studentID: currentUser.id }),
+                    type: "POST",
+                    async: false,
+                    success: function (res) {
+                        teacher = JSON.parse(res.d);
+                        GENERAL.STUDENT.setStudentTeacher(teacher);
+                    },
+                    error: function (e) {
+                        alert("error " + e.responseText);
+                    }
+                });
+            }
+            else {
+                teacher = GENERAL.STUDENT.getStudentTeacher();
+            }
+
+            //get the time range for that teacher
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetTimeRange",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ id: teacher.Id }),
+                type: "POST",
+                async: false,
+                success: function (res) {
+
+                    times = res.d;
+
+                    minimum = times[0];
+                    maximum = times[1];
+
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+
+            //fill the personal info modal with info
+            fillPersonalInfoModal();
+
+            UploadStoredEvents();
+
+            // page is now ready, initialize the calendar...
+
+            $('#calendar').fullCalendar({
+
+                header: {
+                    left: "next, today , prev ",
+                    center: "title",
+                    right: "agendaDay, agendaWeek , month"
+                },
+
+                height: 610,
+
+                minTime: minimum,
+                maxTime: maximum,
+
+                firstDay: 0, //sunday
+                hiddenDays: [6], // hide Saturday.
+                //defaultView: "agendaWeek",
+                locale: "he", //allows to use Hebrew-realted things
+                navLinks: true, //allows to link to specific days by clicking on them
+                //editable: true, //allows to edit events
+                selectable: true, //allows to select spots
+                clickable: true,
+                selectHelper: true,
+                slotDuration: '00:45:00', //makes the hours be in 45 minutes intervals
+
+                buttonText: {
+                    today: 'היום',
+                    next: "הבא",
+                    prev: "הקודם",
+                },
+
+                selectLongPressDelay: 200,
+
+                select: function (start, end) {
+
+                    //1 = month, 2 = day, 3 = hour, 4 = minute
+
+                    //the code works for a specific time, not for a week or month,
+                    //so if it fails to get a specific time, it'll stop right now
+                    try {
+                        startHour = start._i[3];
+                    } catch (e) {
+                        return;
+                    }
+
+                    startMinute = start._i[4];
+
+                    endHour = end._i[3];
+                    endMinute = end._i[4];
+
+                    totalHours = endHour - startHour;
+                    totalMinutes = endMinute - startMinute;
+
+                    while (totalHours > 0) {
+                        totalMinutes += 60;
+                        totalHours -= 1;
+                    }
+
+                    //if exceeding the 2 hour limit (45 * 2 minutes)
+                    if (totalMinutes > 90 || end._i[2] - start._i[2] > 0) {
+                        $("#EventError").modal();
+                        return;
+                    }
+
+                    if (startHour.toString().length < 2) startHour = '0' + startHour;
+                    if (startMinute.toString().length < 2) startMinute = startMinute + '0';
+
+                    if (endHour.toString().length < 2) endHour = '0' + endHour;
+                    if (endMinute.toString().length < 2) endMinute = endMinute + '0';
+
+                    chosenMonth = '' + (parseInt(start._i[1]) + 1);
+                    chosenDay = '' + start._i[2];
+
+                    if (chosenMonth.length < 2) chosenMonth = '0' + chosenMonth;
+                    if (chosenDay.length < 2) chosenDay = '0' + chosenDay;
+
+                    fullDate = chosenDay + "/" + chosenMonth + "/" + start._i[0];
+
+                    //this is to check if the date has already passed
+                    DateToday = new Date();
+                    todayMonth = '' + parseInt(DateToday.getMonth() + 1);
+                    todayDay = '' + DateToday.getDate();
+                    todayHour = '' + DateToday.getHours();
+
+                    if (todayMonth.length < 2) todayMonth = '0' + todayMonth;
+                    if (todayDay.length < 2) todayDay = '0' + todayDay;
+
+                    DateToday = todayDay + "/" + todayMonth + "/" + DateToday.getFullYear();
+
+                    //if the chosen date is before today OR the chosen hour is before now
+                    if (fullDate < DateToday || (fullDate <= DateToday && startHour < parseInt(todayHour))) {
+                        $("#PastTime").modal();
+                        return;
+                    }
+                    //if the chosen date is today and the hour now is 1 hour close to the chosen hour
+                    if (fullDate == DateToday && parseInt(todayHour) >= startHour - 1) {
+                        $("#TooClose").modal();
+                        return;
+                    }
+
+                    $("#givenDate").text("תאריך: " + fullDate);
+                    $("#givenStart").text("שעת התחלת שיעור: " + startHour + ":" + startMinute);
+                    $("#givenEnd").text("שעת סיום שיעור: " + endHour + ":" + endMinute);
+
+                    //if on mobile
+                    if (jQuery.browser.mobile) {
+                        //if mobile isn't connected to the internet
+                        if (IsOffline()) {
+                            eventToSend = {
+                                student: currentUser.id,
+                                teacherid: teacher.Id,
+                                start: startHour + ":" + startMinute,
+                                end: endHour + ":" + endMinute,
+                                Date: fullDate
+                            };
+                            GENERAL.EVENT.setEventInfo(eventToSend);
+                            $("#NoInternetTryToLesson").modal();
+                            return;
+                        }
+                    }
+
+                    //check if the slot is occupied by another user online
+                    CheckIfOccupied(startHour + ":" + startMinute, endHour + ":" + endMinute, fullDate);
+
+                },
+
+                eventClick: function (event) {
+
+                    if (event.title == "תפוס") {
+                        $("#SpotTaken").modal();
+                        return;
+                    }
+
+                    DateToday = new Date();
+
+                    //HOUR NOW
+                    todayHour = DateToday.getHours();
+
+                    todayMonth = '' + parseInt(DateToday.getMonth() + 1);
+                    todayDay = '' + DateToday.getDate();
+
+                    if (todayMonth.length < 2) todayMonth = '0' + todayMonth;
+                    if (todayDay.length < 2) todayDay = '0' + todayDay;
+
+                    //DATE NOW
+                    DateToday = DateToday.getFullYear() + "-" + todayMonth + "-" + todayDay;
+
+                    $.ajax({
+                        dataType: "json",
+                        url: GENERAL.webServerAddress + "/GetEvent",
+                        contentType: "application/json; charset=utf-8",
+                        data: JSON.stringify({ eventId: event.id }),
+                        type: "POST",
+                        success: function (res) {
+
+                            calendarEvent = JSON.parse(res.d);
+
+                            $("#editTitle").text(event.title);
+                            $("#editDate").text("תאריך השיעור: " + moment(event.start).format('DD-MM-YYYY'));
+                            $("#editTime").text("משך השיעור: " + moment(event.start).format('HH:mm') + " - " + moment(event.end).format('HH:mm'));
+                            $("#editPlace").text("מיקום : " + calendarEvent.Location);
+                            $("#editRequest").text("בקשה אישית: " + calendarEvent.Request.Content);
+
+                            if (calendarEvent.Status) {
+                                $("#btnDelete").text("שיעור בוצע").prop("disabled", true);
+                            }
+                                //if the event is within 2 hours, also disable the cancel lesson button
+                            else if (parseInt(event.start._i.split("T")[1].substring(0, 2)) - 2 <= todayHour && DateString == DateToday) {
+                                $("#btnDelete").text("לא ניתן לבטל").prop("disabled", true);
+                            }
+                            else
+                                $("#btnDelete").text("ביטול השיעור").prop("disabled", false);
+
+                            eventToSend = {
+                                student: currentUser.id,
+                                teacherid: teacher.Id,
+                                start: moment(event.start).format('HH') + ":" + moment(event.start).format('mm'),
+                                end: moment(event.end).format('HH') + ":" + moment(event.end).format('mm'),
+                                Date: moment(event.start).format('DD/MM/YYYY')
+                            };
+
+                            $("#EditLesson").modal();
+                        }
+                    });
+                },
+
+                //Fill the calendar with every event found in the DB
+                events: function (event) {
+                    $('#calendar').fullCalendar('removeEvents', event._id);
+                    $.ajax({
+                        dataType: "json",
+                        url: GENERAL.webServerAddress + "/GetAllEventsForATeacher",
+                        contentType: "application/json; charset=utf-8",
+                        data: JSON.stringify({ teacherid: teacher.Id }),
+                        type: "POST",
+                        success: function (res) {
+
+                            listOfEvents = JSON.parse(res.d);
+
+                            //run for each lesson stored in the DB for a specific teacher
+                            $(listOfEvents).each(function (index) {
+
+                                //if the lessons belongs to another student other then the user,
+                                //the color will be different and there will be no info visible
+                                if (listOfEvents[index].StudentId != currentUser.id) {
+                                    color = 'orange';
+                                }
+                                else {
+
+                                    if (listOfEvents[index].Status) {
+                                        color = "#2ae32a";
+                                    }
+                                    else
+                                        color = "";
+                                }
+
+                                eventDATE = listOfEvents[index].EventDate;
+
+                                //to get each and every part of the date
+                                splitDateInfo = eventDATE.split('/');
+
+                                eventYEAR = splitDateInfo[2];
+                                eventMONTH = splitDateInfo[1];
+
+                                if (eventMONTH.length < 2) {
+                                    eventMONTH = "0" + eventMONTH;
+                                }
+
+                                eventDAY = splitDateInfo[0];
+
+                                if (eventDAY.length < 2) {
+                                    eventDAY = "0" + eventDAY;
+                                }
+
+                                //the complete date string needed for the event
+                                DateString = eventYEAR + "-" + eventMONTH + "-" + eventDAY;
+
+                                //to get each and every part of the time
+                                splitSTARTHourInfo = listOfEvents[index].StartingHour.split(':');
+
+                                eventSTARTHOUR = splitSTARTHourInfo[0];
+                                if (eventSTARTHOUR.length < 2) {
+                                    eventSTARTHOUR = "0" + eventSTARTHOUR;
+                                }
+
+                                eventSTARTMINUTE = splitSTARTHourInfo[1];
+
+                                if (eventSTARTMINUTE.length < 2) {
+                                    eventSTARTMINUTE = eventSTARTMINUTE + "0";
+                                }
+
+                                //the complete time string needed for the "start" of an event
+                                StartHourString = eventSTARTHOUR + ":" + eventSTARTMINUTE;
+
+                                splitENDHourInfo = listOfEvents[index].EndingHour.split(':');
+
+                                eventENDHOUR = splitENDHourInfo[0];
+                                if (eventENDHOUR.length < 2) {
+                                    eventENDHOUR = "0" + eventENDHOUR;
+                                }
+
+                                eventENDMINUTE = splitENDHourInfo[1];
+                                if (eventENDMINUTE.length < 2) {
+                                    eventENDMINUTE = eventENDMINUTE + "0";
+                                }
+
+                                //the complete time string needed for the "end" of an event
+                                EndHourString = eventENDHOUR + ":" + eventENDMINUTE;
+
+                                whenToSTART = DateString + "T" + StartHourString + ":00.000Z";
+                                whenToEND = DateString + "T" + EndHourString + ":00.000Z";
+
+                                //if it's a lesson fed to the DB
+                                if (color == "#2ae32a") {
+                                    eventData = {
+                                        id: listOfEvents[index].EventCode,
+                                        title: listOfEvents[index].Title,
+                                        start: whenToSTART,
+                                        end: whenToEND,
+                                        color: color,
+                                    }
+                                }
+                                    //if its a lesson for another student
+                                else if (color != "") {
+                                    eventData = {
+                                        id: listOfEvents[index].EventCode,
+                                        title: "תפוס",
+                                        start: whenToSTART,
+                                        end: whenToEND,
+                                        color: color,
+                                    }
+                                }
+                                    //if its a regular, future event
+                                else
+                                    eventData = {
+                                        id: listOfEvents[index].EventCode,
+                                        title: listOfEvents[index].Title,
+                                        start: whenToSTART,
+                                        end: whenToEND
+                                    };
+                                $('#calendar').fullCalendar('renderEvent', eventData, true);
+                            });
+                            //$('#calendar').fullCalendar('changeView', 'agendaDay');
+                            //$('#calendar').fullCalendar('changeView', 'month');
+                            $('#calendar').fullCalendar('changeView', 'agendaWeek');
+                        },
+                        error: function (e) {
+                            alert("error " + e.responseText);
+                        }
+                    }); //ajax
+                } //events: function
+
+            }) //full calendar
+
+        }); //document ready
+
+        //when there is no internet connection on mobile, show a message talking about lack of online features
+        document.addEventListener("offline", onOffline);
+        function onOffline() {
+            $("#NoInternet").modal();
+        }
+
+        //when internet is back online, call for function
+        document.addEventListener("online", onOnline);
+        function onOnline() {
+            UploadStoredEvents();
+        }
+
+        //do online events that were done when there was no internet
+        function UploadStoredEvents() {
+            //if there were events added during offline time
+            eventsToSend = GENERAL.EVENT.getEventsInfo();
+            if (eventsToSend != null) {
+                $(eventsToSend).each(function (index) {
+                    CurrentLocalEvent = eventsToSend[index];
+                    CheckIfOccupied(CurrentLocalEvent.start, CurrentLocalEvent.end, CurrentLocalEvent.Date);
+                });
+                GENERAL.EVENT.resetEvents();
+            }
+        }
+
+        //checks if currently offline
+        function IsOffline() {
+            return navigator.connection.type == Connection.NONE;
+        }
+
+        function VoiceCommand() {
+
+            //window.plugins.speechRecognition.isRecognitionAvailable(
+            //    function (e) {
+            //        alert('isRecognitionAvailable:' + e);
+            //    },
+            //    function (e) {
+            //        alert('error' + e);
+            //    }
+            //);
+
+            window.plugins.speechRecognition.requestPermission(
+              function (e)
+              { },
+              function (e)
+              {
+                  return;
+              })
+
+            var options = {
+                language: "he",
+                matches: 1,
+                prompt: "מאזין",      // Android only
+                showPopup: true,  // Android only
+                showPartial: false // iOS only
+            }
+
+            window.plugins.speechRecognition.startListening(
+                function (e) {
+                    //if it's a common phrase and was dealt with in the master.js file
+                    if (VoiceCommands(e)) {
+                        return;
+                    }
+                    $("#PersonalRequest").val(e);
+                },
+                function (e) {
+                    alert('error' + e);
+                },
+                options);
+        }
+
+        function LogOut() {
+            Hitnatkut();
+        }
+
+        function fillPersonalInfoModal() {
+            $("#popupFirstName").text("שם פרטי: " + currentUser.firstName);
+            $("#popupLastName").text("שם משפחה: " + currentUser.lastName);
+            $("#popupRegisterDate").text("תאריך הצטרפות: " + currentUser.register);
+
+            $("#popupTeacherName").text("מורה מלמד: " + teacher.FirstName + " " + teacher.LastName);
+
+        }
+
+        function ShowPersonalInfoModal() {
+            $("#ShowPersonalInfo").modal();
+        }
+
+        //for the personal request char limit
+        charsAllowed = 500;
+        charsWritten = 0;
+
+        function ChangeCharLimit() {
+            if ($("#PersonalRequest").val().length > charsWritten) {
+                charsAllowed -= $("#PersonalRequest").val().length - charsWritten;
+                charsWritten += $("#PersonalRequest").val().length - charsWritten;
+            }
+            else if ($("#PersonalRequest").val().length < charsWritten) {
+                charsAllowed += charsWritten - $("#PersonalRequest").val().length;
+                charsWritten -= charsWritten - $("#PersonalRequest").val().length;
+            }
+
+            $("#charLimit").text(charsAllowed + "/500");
+            if (charsAllowed < 0) {
+                $("#btnConfirmAddLesson").attr({ "disabled": true, "data-toggle": "tooltip", "title": "כמות התווים עברה את המקסימום המותר" });
+            }
+            else {
+                $("#btnConfirmAddLesson").attr("disabled", false);
+            }
+        }
+
+        //////////////functions relating to events and the DB//////////////////
+
+        function CheckIfOccupied(start, end, date) {
+
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/CheckIfOccupied",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ teacherid: teacher.Id, starthour: start, endhour: end, Date: date }),
+                type: "POST",
+                async: false,
+                success: function (res) {
+
+                    if (res.d) {
+                        $("#SpotTaken").modal();
+                    }
+                    else {
+                        //call a function that checks if the student already had a lesson for the date
+                        CheckIfElligible(date);
+                    }
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function CheckIfElligible(checkDate) {
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/CheckIfElligible",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ studentid: currentUser.id, Date: checkDate }),
+                type: "POST",
+                async: false,
+                success: function (res) {
+
+                    if (res.d) {
+                        $("#MaxLessons").modal();
+                    }
+                    else {
+                        //call a function that inserts the attempt to the DB
+                        //for the occasion that someone else is trying to access the same spot
+                        InsertAttemptToCreateLesson();
+                    }
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function InsertAttemptToCreateLesson() {
+
+            if (CurrentLocalEvent != null) {
+                eventToSend = {
+                    student: CurrentLocalEvent.student,
+                    teacherid: CurrentLocalEvent.teacherid,
+                    start: CurrentLocalEvent.start,
+                    end: CurrentLocalEvent.end,
+                    Date: CurrentLocalEvent.Date
+                };
+            }
+            else {
+                eventToSend = {
+                    student: currentUser.id,
+                    teacherid: teacher.Id,
+                    start: startHour + ":" + startMinute,
+                    end: endHour + ":" + endMinute,
+                    Date: fullDate
+                };
+            }
+
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/InsertAttemptToCreateLesson",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ student: eventToSend.student, teacherid: eventToSend.teacherid, start: eventToSend.start, end: eventToSend.end, Date: eventToSend.Date }),
+                type: "POST",
+                success: function (res) {
+                    EventCode = res.d;
+
+                    //reset the personal request text field and counters
+                    $("#PersonalRequest").val("");
+                    charsAllowed = 500;
+                    charsWritten = 0;
+                    $("#charLimit").text(charsAllowed + "/500");
+                    //end reset
+
+                    //show the lesson registration modal
+                    $("#AddLesson").modal();
+
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function CancelLessonAdding() {
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/DeleteAttempt",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify(),
+                type: "POST",
+                success: function (res) {
+
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function MakeLessonEvent() {
+
+            //will insert the personal request the to DB and create
+            //reqid = the code for the req in the DB
+            requestToEnter = $("#PersonalRequest").val();
+
+            //if there was no request at all, just update the event table
+            if (requestToEnter == "") {
+                eventTitle = "שיעור עם " + teacher.FirstName;
+                meetingPlace = $("#meetingPlace").val();
+
+                $.ajax({
+                    dataType: "json",
+                    url: GENERAL.webServerAddress + "/UpdateAttemptToLesson",
+                    contentType: "application/json; charset=utf-8",
+                    data: JSON.stringify({ eventCode: EventCode, title: eventTitle, place: meetingPlace, endhour: endHour + ":" + endMinute, reqID: -1 }),
+                    type: "POST",
+                    success: function (res) {
+                        if (res.d == 0) {
+                            $("#TimedOut").modal();
+                            return;
+                        }
+                        headlight = "נקבע שיעור חדש עם " + currentUser.firstName + " " + currentUser.lastName;
+                        SendPushToTeacher(headlight);
+                    },
+                    error: function (e) {
+                        alert("error " + e.responseText);
+                    }
+                });
+
+                return;
+            }
+
+            //else, insert the personal request to the db and link it to the event
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/InsertPersonalRequest",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ studentId: currentUser.id, teacherId: teacher.Id, content: requestToEnter }),
+                type: "POST",
+                success: function (res) {
+
+                    reqid = res.d;
+
+                    eventTitle = "שיעור עם " + teacher.FirstName;
+                    meetingPlace = $("#meetingPlace").val();
+
+                    $.ajax({
+                        dataType: "json",
+                        url: GENERAL.webServerAddress + "/UpdateAttemptToLesson",
+                        contentType: "application/json; charset=utf-8",
+                        data: JSON.stringify({ eventCode: EventCode, title: eventTitle, place: meetingPlace, endhour: endHour + ":" + endMinute, price: 120, reqID: reqid }),
+                        type: "POST",
+                        success: function (res) {
+                            headlight = "נקבע שיעור חדש עם " + currentUser.firstName + " " + currentUser.lastName;
+                            SendPushToTeacher(headlight);
+                        },
+                        error: function (e) {
+                            alert("error " + e.responseText);
+                        }
+                    });
+
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function SendPushToTeacher(koteret) {
+
+                message = "בתאריך: " + eventToSend.Date + " בשעה: " + eventToSend.start + ":" + eventToSend.end;
+
+                $.ajax({
+                    dataType: "json",
+                    url: GENERAL.webServerAddress + "/SendPushMessage",
+                    contentType: "application/json; charset=utf-8",
+                    data: JSON.stringify({ user_id: teacher.Id, msg: message, head: koteret }),
+                    type: "POST",
+                    async: false,
+                    success: function () {
+                        location.reload(true);
+                    },
+                    error: function (e) {
+                        alert("error " + e.responseText);
+                    }
+                });
+        }
+
+        function AskDelete() {
+            $("#SureDelete").modal();
+        }
+
+        function DeleteEvent() {
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/DeleteLesson",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ eventId: calendarEvent.EventCode }),
+                type: "POST",
+                success: function (res) {
+                    headlight = "בוטל השיעור עם " + currentUser.firstName + " " + currentUser.lastName;
+                    SendPushToTeacher(headlight);
+                }
+            });
+        }
+
+        //////////////END functions relating to events and the DB END//////////////////
+
+        function Reload() {
+            location.reload(true);
+        }
+
+        function GoToEdit() {
+            location.href = "editUserDetailes.html";
+        }
+
+    </script>
+
+</head>
+<body>
+    <nav class="navbar navbar-toggleable-md navbar-inverse bg-inverse fixed-top">
+        <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <a class="navbar-brand" href="studentCalendar.html" data-toggle="tooltip" title="דף הבית">
+            <img id="logo" src="images/EZDrive.png" />
+        </a>
+        <a class="navbar-brand" href="https://www.facebook.com/EZDrive-1357166781017888/" data-toggle="tooltip" title="לפייסבוק האפליקציה">
+            <i class="fa fa-facebook-official" style="color:white"></i>
+        </a>
+        <div class="collapse navbar-collapse" id="navbarsExampleDefault">
+
+            <div id="userInfoPanel" onclick="ShowPersonalInfoModal()" data-toggle="tooltip" data-placement="bottom" title="לחץ כאן לפרופיל">
+                <img id="user-image">
+                <span id="userFullName"></span>
+            </div>
+
+            <ul class="navbar-nav mr-auto">
+                <li class="nav-item active ">
+                    <a class="nav-link" href="studentCalendar.html"><i class="fa fa-calendar"></i> לוח זמנים <span class="sr-only">(current)</span></a>
+                </li>
+                <li>
+                    <a class="nav-link" href="studentProgress.html"><i class="fa fa-percent"></i> התקדמות</a>
+                </li>
+                <li>
+                    <a class="nav-link" href="studentGreenForm.html"><i class="fa fa-file-o"></i> טופס ירוק</a>
+                </li>
+                <li>
+                    <a class="nav-link" href="studentRequest.html"><i class="fa fa-comment-o"></i> בקשות אישיות</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="settings.html"><i class="fa fa-cog fa-spin"></i> הגדרות</a>
+                </li>
+                <li class="nav-item">
+                    <i class="fa fa-microphone" id="recIcon" onclick="VoiceCommand()"></i>
+                </li>
+                <!--<li class="nav-item">
+                    <input id="Command" class="form-control" type="text" placeholder="הזן פקודה...">
+                    <button class="btn btn-outline-success my-2 my-sm-0" onclick="VoiceCommand()">הפעל</button>
+                </li>-->
+            </ul>
+            <!--<form class="form-inline my-2 my-lg-0">
+                <input class="form-control mr-sm-2" type="text" placeholder="חפש...">
+                <button class="btn btn-outline-success my-2 my-sm-0" type="submit">חפש</button>
+            </form>-->
+        </div>
+    </nav>
+
+    <br /><br /><br /><br />
+
+    <!--<input id="btnRec" type="button" value="Record" onclick="startRec()" />-->
+
+    <div id="calendar"></div>
+
+    <!-- Modals -->
+
+    <div id="AddLesson" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" onclick="CancelLessonAdding()">&times;</button>
+                    <h4 class="modal-title">הרשמה לשיעור</h4>
+                </div>
+                <div class="modal-body">
+                    <p id="givenDate"></p>
+                    <p id="givenStart"></p>
+                    <p id="givenEnd"></p>
+                    <input type="text" id="meetingPlace" placeholder="תיאור מקום מפגש" />
+                    <label class="control-label">:מקום המפגש</label>
+                    <br /><br />
+                    <label class="control-label">
+                        <input type="checkbox" id="sendMail" /> שלח פרטי השיעור למייל שלי
+                    </label>
+                    <br />
+                    <i class="fa fa-microphone" id="recQuestIcon" onclick="VoiceCommand()"></i>
+                    <label class="control-label">:בקשות אישיות</label>
+                    <div>
+                        <textarea class="form-control" rows="5" id="PersonalRequest" placeholder="הזן בקשה כאן" oninput="ChangeCharLimit()"></textarea>
+                        <p id="charLimit">500/500</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="btnConfirmAddLesson" class="btn btn-success" data-dismiss="modal" onclick="MakeLessonEvent()">לאישור הרשמה</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal" onclick="CancelLessonAdding()">לביטול הרשמה</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="TimedOut" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">תם הזמן</h4>
+                </div>
+                <div class="modal-body">
+                    <p>משבצת זמן זמינה רק עד 5 דקות</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" data-dismiss="modal">סגור</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="EditLesson" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">פרטי שיעור</h4>
+                </div>
+                <div class="modal-body">
+                    <p id="editTitle"></p>
+                    <p id="editDate"></p>
+                    <p id="editTime"></p>
+                    <p id="editPlace"></p>
+                    <p id="editRequest"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal">סגירה</button>
+                    <button type="button" id="btnDelete" class="btn btn-danger" data-dismiss="modal" onclick="AskDelete()">ביטול השיעור</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="ShowPersonalInfo" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">פרטים אישיים</h4>
+                </div>
+                <div class="modal-body">
+                    <p id="popupFirstName"></p>
+                    <p id="popupLastName"></p>
+                    <p id="popupRegisterDate"></p>
+                    <p id="popupTeacherName"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal" onclick="GoToEdit()">עריכת פרטים</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal" onclick="LogOut()">התנתקות</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="EventError" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">אירוע לא תקין</h4>
+                </div>
+                <div class="modal-body">
+                    <p id="EventErrorMessage">לא ניתן לבחור יותר משעתיים!</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" data-dismiss="modal">סגור</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="SpotTaken" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">המקום תפוס</h4>
+                </div>
+                <div class="modal-body">
+                    <p id="EventErrorMessage">משבצת זמן זו תפוסה ואינה זמינה עבורך</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" data-dismiss="modal" onclick="Reload()">סגור</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="PastTime" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">הזמן חלף</h4>
+                </div>
+                <div class="modal-body">
+                    <p id="EventErrorMessage">הזמן שבחרת חלף כבר. נא לבחור זמן עתידי</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" data-dismiss="modal">סגור</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="TooClose" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">זמן קרוב מדי</h4>
+                </div>
+                <div class="modal-body">
+                    <p id="EventErrorMessage">השעה שבחרת קרובה מאוד לשעה הנוכחית. נא לבחור משבצת זמן של יותר משעה מעכשיו</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" data-dismiss="modal">סגור</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="MaxLessons" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">מכסת שיעורים</h4>
+                </div>
+                <div class="modal-body">
+                    <p id="EventErrorMessage">מכסת השיעורים המותרת ביום הינה: 1. כבר נקבע שיעור עבורך עבור אותו יום</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" data-dismiss="modal">סגור</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="SureDelete" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">?בטוח למחוק</h4>
+                </div>
+                <div class="modal-body">
+                    <p>האם ברצונך למחוק את השיעור המבוקש?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal" onclick="DeleteEvent()">כן</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal">לא</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="NoInternet" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">אין אינטרנט</h4>
+                </div>
+                <div class="modal-body">
+                    <p>לא זוהה חיבור לאינטרנט. תיתכן הצגה חלקית של אירועים</p>
+                    <p>אירועים חדשים שברצונך להזין יוזנו במערכת כאשר יימצא חיבור לאינטרנט</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-info" data-dismiss="modal">הבנתי</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="NoInternetTryToLesson" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">אין אינטרנט</h4>
+                </div>
+                <div class="modal-body">
+                    <p>הזמנים נשמרו</p>
+                    <p>כאשר יחזור האינטרנט, יהיה אפשרי להמשיך בתהליך ההרשמה</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-info" data-dismiss="modal">הבנתי</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

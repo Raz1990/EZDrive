@@ -1,0 +1,25 @@
+﻿#logo {
+    height: 20%;
+    width: 50%;
+}
+
+#userInfoPanel #user-image {
+    float: left;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    margin-right: 10px;
+    margin-top: -2px;
+    direction:rtl;
+    text-align:right;
+    cursor:pointer;
+}
+
+#userInfoPanel{
+            margin-top:10px;
+}
+
+#userFullName {
+    color: gold;
+        cursor:pointer;
+}

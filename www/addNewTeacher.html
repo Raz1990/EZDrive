@@ -1,0 +1,755 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <meta charset="utf-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link href="bootstrap-4.0.0-alpha.6-dist/css/bootstrap.min.css" rel="stylesheet" />
+    <script src="lib/jquery-1.11.3.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
+    <script src="bootstrap-4.0.0-alpha.6-dist/js/bootstrap.min.js"></script>
+
+    <script src="ExtraJS/mobileChecker.js"></script>
+    <script src="ExtraJS/master.js"></script>
+    <link href="Styles/NavBarStyle.css" rel="stylesheet" />
+    <link href="Styles/NeedRightSuperStyle.css" rel="stylesheet" />
+    <link href="Styles/EveryPageStyle.css" rel="stylesheet" />
+
+    <link href="lib/font-awesome-4.7.0/css/font-awesome.min.css" rel="stylesheet" />
+
+    <script>
+
+        items = 12;
+        progress = 0
+        progressText = 0;
+
+        $(document).ready(function () {
+
+            currentUser = GENERAL.USER.getUserInfo();
+            //if coming here without logging in first
+            if (currentUser == null || currentUser.type != "admin") {
+                GENERAL.USER.logOutUser();
+                location.href = "loginPage.html";
+                return;
+            }
+
+            searchForPending();
+
+            //if NOT on mobile
+            if (!jQuery.browser.mobile) {
+                //hide the microphone options
+                $("#recIcon").hide();
+            }
+
+            FillCities();
+
+            //set the info panel with the user info
+            $("#user-image").attr("src", currentUser.image)
+            $("#userFullName").text(GENERAL.USER.getUserFullName());
+
+            //fill the personal info modal with info
+            fillPersonalInfoModal();
+        });
+
+        function searchForPending() {
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetAllPendingRequestsForATeacher",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ teacherid: currentUser.id }),
+                type: "POST",
+                success: function (res) {
+                    requestList = JSON.parse(res.d);
+
+                    if (requestList.length > 0) {
+                        $("#pending").removeClass("fa fa-envelope-open-o").addClass("fa fa-envelope").append(requestList.length);
+                    }
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function VoiceCommand() {
+            //window.plugins.speechRecognition.isRecognitionAvailable(
+            //    function (e) {
+            //        alert('isRecognitionAvailable:' + e);
+            //    },
+            //    function (e) {
+            //        alert('error' + e);
+            //    }
+            //);
+
+            window.plugins.speechRecognition.requestPermission(
+              function (e)
+              { },
+              function (e) {
+                  return;
+              })
+
+            var options = {
+                language: "he",
+                matches: 1,
+                prompt: "מאזין",      // Android only
+                showPopup: true,  // Android only
+                showPartial: false // iOS only
+            }
+
+            window.plugins.speechRecognition.startListening(
+                function (e) {
+                    //if it's a common phrase and was dealt with in the master.js file
+                    if (VoiceCommands(e)) {
+                        return;
+                    }
+                },
+                function (e) {
+                    alert('error' + e);
+                },
+                options);
+        }
+
+        function fillPersonalInfoModal() {
+            $("#popupFirstName").text("שם פרטי: " + currentUser.firstName);
+            $("#popupLastName").text("שם משפחה: " + currentUser.lastName);
+            $("#popupRegisterDate").text("תאריך הצטרפות: " + currentUser.register);
+
+            school = GENERAL.ADMIN.getAdminSchool();
+            $("#popupSchool").text("מנהל בית ספר: " + school.Name).attr("id", school.Code);
+
+        }
+
+        function ShowPersonalInfoModal() {
+            $("#ShowPersonalInfo").modal();
+        }
+
+        function LogOut() {
+            Hitnatkut();
+        }
+
+        function CreateNewTeacher() {
+
+            $(".done").css("background", "");
+
+            //if the progress (info supplied) is not 100% completed, alert and abort
+            if ($("#bar").text() != "100%") {
+                $("#NoInfo").modal();
+                $(".notdone").css("background", "lightcoral");
+                return;
+            }
+
+            if ($("#male")[0].checked) {
+                gendercode = 1;
+            }
+            else {
+                gendercode = 2;
+            }
+
+            if ($("#android")[0].checked) {
+                platform = $("#android").val();
+            }
+            else {
+                platform = $("#ios").val();
+            }
+
+            //if ($("#inputPic")[0].value != "") {
+            //    picLocation = $("#inputPic")[0].value;
+            //}
+            //else
+                picLocation = "";
+
+            var newTeacher = {
+                id: $("#inputID").val(),
+                FName: $("#inputFName").val(),
+                LName: $("#inputLName").val(),
+                CityCode: parseInt($("#cities option:selected").attr("id")),
+                StreetCode: parseInt($("#streets option:selected").attr("id")),
+                GenderCode: gendercode,
+                Phone: $("#Number").val(),
+                Platform: platform,
+                Mail: $("#inputEMail").val(),
+                Password: $("#inputPassword").val(),
+                BirthDate: $("#inputBirth").val(),
+                Pic: picLocation
+            }
+
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/CreateNewTeacher",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ id: newTeacher.id, FName: newTeacher.FName, LName: newTeacher.LName, pass: newTeacher.Password, phone: newTeacher.Phone, platform: newTeacher.Platform, mail: newTeacher.Mail, genderCode: newTeacher.GenderCode, cityCode: newTeacher.CityCode, streetCode: newTeacher.StreetCode, schoolID: GENERAL.ADMIN.getAdminSchool().Code, birth: newTeacher.BirthDate, pic: newTeacher.Pic}),
+                type: "POST",
+                success: function () {
+                    $("#AddedOK").modal();
+                },
+                error: function (e) {
+                    alert("error CreatenewTeacher " + e.responseText);
+                }
+            });
+        }
+
+        //used to fill a city list with all the cities
+        function FillCities() {
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetAllCities",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify(),
+                type: "POST",
+                success: function (res) {
+
+                    var CityList = JSON.parse(res.d);
+
+                    for (var i in CityList) {
+                        var $option = $("<option>").html(CityList[i].Name).attr("id", CityList[i].Code);
+
+                        $("#cities").append($option);
+                    }
+
+                },
+                error: function (e) {
+                    alert("error GetAllCities");
+                }
+            });
+        }
+
+        //used to fill all the streets at a given city
+        function FillStreets() {
+
+            $("#streets").html("<option>בחר</option>");
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetAllStreets",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ cityCode: $("#cities option:selected").attr("id") }),
+                type: "POST",
+                success: function (res) {
+
+                    var StreetList = JSON.parse(res.d);
+
+                    for (var i in StreetList) {
+                        var $option = $("<option>").html(StreetList[i].Name).attr("id", StreetList[i].Code);
+                        $("#streets").append($option);
+                    }
+
+                },
+                error: function (e) {
+                    alert("error GetAllStreets");
+                }
+            });
+
+            $("#streets").focus();
+        }
+
+        function CheckPic(obj) {
+
+            //if there is something here
+            if ($("#inputPic")[0].value != "") {
+                //will get the type of the file
+                inputType = obj.files[0]["type"].split('/')[1];
+            }
+            else
+                return;
+
+            if (inputType != "jpg" && inputType != "jpeg" && inputType != "png") {
+                $("#LBLerrorPIC").text("קבצי תמונה בלבד");
+                $("#inputPic")[0].files = null;
+                $("#inputPic")[0].value = null;
+            }
+            else
+                $("#LBLerrorPIC").text("");
+        }
+
+        function CheckFName(obj) {
+            try {
+                var input = obj.value;
+                if (input == "") throw "אין להשאיר שדה זה ריק";
+                if (!isNaN(input)) throw "אין למלא מספרים בשדה זה";
+                if (!(input.charCodeAt(0) >= 0x590 && input.charCodeAt(0) <= 0x5FF)) throw "יש לרשום אותיות בעברית בלבד";
+            } catch (e) {
+                $("#LBLerrorFNAME").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorFNAME").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function CheckLName(obj) {
+            try {
+                var input = obj.value;
+                if (input == "") throw "אין להשאיר שדה זה ריק";
+                if (!isNaN(input)) throw "אין למלא מספרים בשדה זה";
+                if (!(input.charCodeAt(0) >= 0x590 && input.charCodeAt(0) <= 0x5FF)) throw "יש לרשום אותיות בעברית בלבד";
+            } catch (e) {
+                $("#LBLerrorLNAME").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorLNAME").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function CheckID(obj) {
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/SearchForPerson",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ id: obj.value, password: "" }),
+                type: "POST",
+                success: function (res) {
+
+                    if (res.d) {
+                        $("#LBLerrorID").text("קיים משתמש במערכת עם תעודת זהות זו. לא ניתן ליצור משתמש חדש עם מספר זהה");
+                        ChangeProgress(obj, false);
+                        return;
+                    }
+                    try {
+                        var input = obj.value;
+                        if (input == "") throw "אין להשאיר שדה זה ריק";
+                        if (isNaN(input)) throw "שדה זה מחייב מספר";
+                        if (input < 100000000) throw "חובה מספר בעל 9 ספרות";
+                        if (input > 999999999) throw "חובה מספר בעל 9 ספרות";
+                    } catch (e) {
+                        $("#LBLerrorID").text(e);
+                        ChangeProgress(obj, false);
+                        return;
+                    }
+                    $("#LBLerrorID").text("");
+                    ChangeProgress(obj, true);
+                },
+                error: function (e) {
+
+                }
+            });
+        }
+
+        function CheckBirth(obj) {
+            try {
+                var input = obj.value;
+                if (input == "") throw "יש למלא תאריך לידה מלא";
+            } catch (e) {
+                $("#LBLerrorDate").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorDate").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function CheckCity(obj) {
+            try {
+                var input = obj.value;
+                if (input == "בחר") throw "יש לבחור עיר מהרשימה";
+            } catch (e) {
+                $("#LBLerrorCITY").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorCITY").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function CheckStreet(obj) {
+            try {
+                var input = obj.value;
+                if (input == "בחר") throw "יש לבחור רחוב מהרשימה";
+            } catch (e) {
+                $("#LBLerrorSTREET").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorSTREET").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function CheckPhone(obj) {
+            try {
+                var input = obj.value;
+                if (input == "") throw "אין להשאיר שדה זה ריק";
+                if (isNaN(input)) throw "שדה זה מחייב מספר";
+                if (input < 100000000 || input > 9999999999) throw "חובה מספר בעל 10 ספרות";
+                if (input / 10000000 < 50 || input / 10000000 > 60) throw "חובה קידומת תקינה";
+            } catch (e) {
+                $("#LBLerrorPHONE").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorPHONE").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function CheckMail(obj) {
+
+            var emailReg = /^([\w-\.]+@([\w-]+\.)+[\w-]{2,4})?$/;
+
+            try {
+                var input = obj.value;
+                if (input == "") throw "אין להשאיר שדה זה ריק";
+                if (!emailReg.test(input)) throw "יש למלא כתובת מייל תקינה";
+            } catch (e) {
+                $("#LBLerrorMAIL").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorMAIL").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function CheckPassword(obj) {
+            try {
+                var input = obj.value;
+                if (input == "") throw "אין להשאיר שדה זה ריק";
+                if (!/^[a-zA-Z0-9- ]*$/.test(input)) throw "יש לרשום אותיות ומספרים בלבד";
+            } catch (e) {
+                $("#LBLerrorPASS").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            finally {
+                //reset the pass authentication field to ensure it will always
+                //require to fill it again upon touching the password field
+                $("#inputPasswordAgain").val("");
+                $("#inputPasswordAgain").focus();
+            }
+            $("#LBLerrorPASS").text("");
+            ChangeProgress(obj, true);
+        }
+
+        //used to check if the password is written correctly in both places
+        function AuthenticatePasswordInput(obj) {
+            if ($("#inputPasswordAgain").val() != $("#inputPassword").val()) {
+                $("#LBLinputPasswordAgainError").text("סיסמה אינה תואמת");
+                ChangeProgress(obj, false);
+            }
+            else {
+                $("#LBLinputPasswordAgainError").text("");
+                ChangeProgress(obj, true);
+            }
+        }
+
+        function ChangeProgress(obj, raise) {
+
+            var $input = $("#" + obj.id);
+
+            //if its the first time filling the field
+            //the "notdone" class is to make sure we don't update progress
+            //to a field that's just being edited
+            if ($input.parent().parent().hasClass("notdone")) {
+                if (raise) {
+                    progress += parseFloat((100 / items));
+                    progressText = progress.toFixed();
+                    $input.parent().parent().addClass("done");
+                    $input.parent().parent().removeClass("notdone");
+                    $input.parent().parent().css("background", "aqua");
+                }
+                else
+                    $input.parent().parent().css("background", "lightsalmon");
+            }
+            else {
+                if (!raise) {
+                    $input.parent().parent().removeClass("done");
+                    $input.parent().parent().addClass("notdone");
+                    $input.parent().parent().css("background", "lightsalmon");
+                    progress -= parseFloat(100 / items);
+                    progressText = progress.toFixed();
+                }
+            }
+
+            $("#bar").css("width", progress + "%");
+            $("#bar").text(progressText + "%");
+        }
+
+        function ReloadPage() {
+            location.reload(true);
+        }
+
+    </script>
+
+</head>
+<body>
+    <nav class="navbar navbar-toggleable-md navbar-inverse bg-inverse fixed-top">
+        <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <a class="navbar-brand" href="adminHomePage.html" data-toggle="tooltip" title="דף הבית">
+            <img id="logo" src="images/EZDrive.png" />
+        </a>
+        <a class="navbar-brand" href="https://www.facebook.com/EZDrive-1357166781017888/" data-toggle="tooltip" title="לפייסבוק האפליקציה">
+            <i class="fa fa-facebook-official" style="color:white"></i>
+        </a>
+        <div class="collapse navbar-collapse" id="navbarsExampleDefault">
+
+            <div id="userInfoPanel" onclick="ShowPersonalInfoModal()" data-toggle="tooltip" data-placement="bottom" title="לחץ כאן לפרופיל">
+                <img id="user-image">
+                <span id="userFullName"></span>
+            </div>
+
+            <ul class="navbar-nav mr-auto">
+                <li>
+                    <a class="nav-link" href="adminHomePage.html"><i class="fa fa-home"></i> דף הבית <span class="sr-only">(current)</span></a>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle active" href="http://example.com" id="dropdown01" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa fa-user"></i> מורים</a>
+                    <div class="dropdown-menu" aria-labelledby="dropdown01">
+                        <a class="dropdown-item nav-item active " href="addNewTeacher.html"><i class="fa fa-plus"></i> מורה חדש</a>
+                        <a class="dropdown-item" href="allTeachers.html"><i class="fa fa-users"></i> כל המורים</a>
+                    </div>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="http://example.com" id="dropdown01" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa fa-car"></i> רכבים</a>
+                    <div class="dropdown-menu" aria-labelledby="dropdown01">
+                        <a class="dropdown-item" href="addNewCar.html"><i class="fa fa-plus"></i> רכב חדש</a>
+                        <a class="dropdown-item" href="allCars.html"><i class="fa fa-sitemap"></i> כל הרכבים</a>
+                        <a class="dropdown-item" href="addNewCarModel.html"><i class="fa fa-tag"></i> דגם חדש</a>
+                    </div>
+                </li>
+                <li>
+                    <a class="nav-link" href="studentsPendingForOK_ADMIN.html"><i id="pending" class="fa fa-envelope-open-o"></i> הודעות</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="settings.html"><i class="fa fa-cog fa-spin"></i> הגדרות</a>
+                </li>
+                <li class="nav-item">
+                    <i class="fa fa-microphone" id="recIcon" onclick="VoiceCommand()"></i>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <br /><br /><br />
+
+    <div dir="rtl" style="margin-top:1%">
+
+        <h2>מלא את כל הפרטים הנחוצים על מנת להוסיף מורה חדש לבית ספרך, ולחץ על "רשום מורה"</h2>
+
+        <div class="progress" dir="rtl">
+            <div id="bar" class="progress-bar" role="progressbar" aria-valuenow="70"
+                 aria-valuemin="0" aria-valuemax="100" style="width:0%">
+                0%
+            </div>
+        </div>
+
+        <br /><br />
+
+        <div id="PersonalInfo" dir="rtl">
+
+            <form class="form-horizontal">
+
+                <!--1-->
+                <div class="form-group notdone">
+                    <label class="col-sm-2 control-label">שם פרטי</label>
+                    <div class="col-sm-2">
+                        <input class="form-control" id="inputFName" type="text" placeholder="שם פרטי" required autofocus onblur="CheckFName(this)">
+                    </div>
+                    <label id="LBLerrorFNAME"></label>
+                </div>
+
+                <!--2-->
+                <div class="form-group notdone">
+                    <label class="col-sm-2 control-label">שם משפחה</label>
+                    <div class="col-sm-2">
+                        <input class="form-control" id="inputLName" type="text" placeholder="שם משפחה" required autofocus onblur="CheckLName(this)">
+                    </div>
+                    <label id="LBLerrorLNAME"></label>
+                </div>
+
+                <!--3-->
+                <div class="form-group  notdone">
+                    <label class="col-sm-2 control-label">תעודת זהות</label>
+                    <div class="col-sm-2">
+                        <input class="form-control" id="inputID" type="text" placeholder="תעודת זהות" required autofocus onblur="CheckID(this)">
+                    </div>
+                    <label id="LBLerrorID"></label>
+                </div>
+
+                <!--12-->
+                <div class="form-group  notdone">
+                    <label class="col-sm-2 control-label">תאריך לידה</label>
+                    <div class="col-sm-2">
+                        <input class="form-control" id="inputBirth" type="date" required autofocus onblur="CheckBirth(this)">
+                    </div>
+                    <label id="LBLerrorDate"></label>
+                </div>
+
+                <!--10-->
+                <div class="form-group notdone">
+                    <label class="col-sm-2 control-label">סיסמה</label>
+                    <div class="col-sm-2">
+                        <input class="form-control" id="inputPassword" type="password" placeholder="סיסמה" required autofocus onblur="CheckPassword(this)">
+                    </div>
+                    <label id="LBLerrorPASS"></label>
+                </div>
+
+                <!--11-->
+                <div class="form-group notdone">
+                    <label class="col-sm-2 control-label">אימות סיסמה</label>
+                    <div class="col-sm-2">
+                        <input class="form-control" id="inputPasswordAgain" type="password" placeholder="סיסמה" required autofocus onblur="AuthenticatePasswordInput(this)">
+                    </div>
+                    <label id="LBLinputPasswordAgainError"></label>
+                </div>
+
+                <!--4-->
+                <div class="form-group notdone">
+                    <label>עיר</label>
+                    <div>
+                        <select id="cities" onchange="FillStreets()" required autofocus onblur="CheckCity(this)">
+                            <option id="-1">בחר</option>
+                        </select>
+                    </div>
+                    <label id="LBLerrorCITY"></label>
+                </div>
+
+                <!--5-->
+                <div class="form-group notdone">
+                    <label>רחוב</label>
+                    <div>
+                        <select id="streets" required autofocus onblur="CheckStreet(this)">
+                            <option>בחר</option>
+                        </select>
+                    </div>
+                    <label id="LBLerrorSTREET"></label>
+                </div>
+
+                <!--6-->
+                <div class="form-group notdone">
+                    <label>מין</label>
+                    <label class="radio-inline"><input type="radio" id="male" name="gender" required onblur="ChangeProgress(this,true)">זכר</label>
+                    <label class="radio-inline"><input type="radio" id="female" name="gender" required onblur="ChangeProgress(this, true)">נקבה</label>
+                </div>
+
+                <!--7-->
+                <div class="form-group notdone">
+                    <label>מספר נייד (כולל קידומת)</label>
+                    <div class="col-sm-2">
+                        <input type="text" class="form-control" id="Number" required autofocus onblur="CheckPhone(this)">
+                    </div>
+                    <label id="LBLerrorPHONE"></label>
+                </div>
+
+                <!--8-->
+                <div class="form-group notdone">
+                    <label>פלטפורמת נייד</label>
+                    <label class="radio-inline"><input type="radio" id="android" name="platform" value="אנדרואיד" autofocus onblur="ChangeProgress(this,true)">אנדרואיד</label>
+                    <label class="radio-inline"><input type="radio" id="ios" name="platform" value="אייפון" autofocus onblur="ChangeProgress(this, true)">אייפון</label>
+                </div>
+
+                <!--9-->
+                <div class="form-group notdone">
+                    <label class="col-sm-2 control-label">כתובת דואר אלקטרוני</label>
+                    <div class="col-sm-3">
+                        <input class="form-control" id="inputEMail" type="email" placeholder="מייל" required autofocus onblur="CheckMail(this)">
+                    </div>
+                    <label id="LBLerrorMAIL"></label>
+                </div>
+
+                <!--<div class="form-group">
+                    <label class="col-sm-2 control-label">תמונה</label>
+                    <div class="col-sm-3">
+                        <input class="form-control" id="inputPic" type="file" onchange="CheckPic(this)">
+                    </div>
+                    <label id="LBLerrorPIC"></label>
+                </div>-->
+
+            </form>
+        </div>
+
+        <!-- Trigger the modal with a button -->
+        <button type="button" id="signUpStartUp" class="btn btn-info btn-lg" data-toggle="modal" data-target="#Confirm">רשום מורה</button>
+
+    </div>
+
+    <!-- Modals -->
+
+    <div id="ShowPersonalInfo" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">פרטים אישיים</h4>
+                </div>
+                <div class="modal-body">
+                    <p id="popupFirstName"></p>
+                    <p id="popupLastName"></p>
+                    <p id="popupRegisterDate"></p>
+                    <p id="popupSchool"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal" onclick="GoToEdit()">עריכת פרטים</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal" onclick="LogOut()">התנתקות</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="Confirm" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">אישור הרשמה</h4>
+                </div>
+                <div class="modal-body">
+                    <p>האם כל הפרטים הנ''ל נכונים?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success  media-body" data-dismiss="modal" onclick="CreateNewTeacher()">אישור</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal">ביטול</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="NoInfo" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">לא הוזנו כל הפרטים</h4>
+                </div>
+                <div class="modal-body">
+                    <p>יש למלא את כל הפרטים הנחוצים להרשמה</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal">הבנתי</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="AddedOK" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">הצלחה!</h4>
+                </div>
+                <div class="modal-body">
+                    <p>פרטי המורה נקלטו במערכת בהצלחה</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal" onclick="ReloadPage()">סיום</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

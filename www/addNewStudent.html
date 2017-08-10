@@ -1,0 +1,1135 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <meta charset="utf-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+
+    <link href="bootstrap-4.0.0-alpha.6-dist/css/bootstrap.min.css" rel="stylesheet" />
+
+    <script src="lib/jquery-1.11.3.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
+    <script src="bootstrap-4.0.0-alpha.6-dist/js/bootstrap.min.js"></script>
+
+    <script type="text/javascript" charset="utf-8" src="cordova.js"></script>
+
+    <script src="ExtraJS/mobileChecker.js"></script>
+
+    <link href="Styles/NeedLeftSuperStyle.css" rel="stylesheet" />
+
+    <link rel="stylesheet" href="//code.jquery.com/ui/1.11.4/themes/smoothness/jquery-ui.css" />
+
+    <script src="ExtraJS/master.js"></script>
+    <link href="Styles/EveryPageStyle.css" rel="stylesheet" />
+
+    <link href="lib/font-awesome-4.7.0/css/font-awesome.min.css" rel="stylesheet" />
+
+    <script>
+
+        items = 13;
+        progress = 0
+        progressText = 0;
+
+        $(document).ready(function () {
+
+            //if NOT on mobile
+            if (!jQuery.browser.mobile) {
+                //hide the image div requiring mobile elements
+                $("#personPictureDiv").hide();
+            }
+
+            FillCities();
+            FillSchools();
+            $("#HasLicensePakadim").hide();
+            FillLicenses();
+        });
+
+        //VALIDATION FUNCTIONS
+
+        function CheckPic(obj) {
+            //if there is something here
+            if ($("#inputPic")[0].value != "") {
+                //will get the type of the file
+                inputType = obj.files[0]["type"].split('/')[1];
+            }
+            else
+                return;
+
+            if (inputType != "jpg" && inputType != "jpeg" && inputType != "png") {
+                $("#LBLerrorPIC").text("קבצי תמונה בלבד");
+                $("#inputPic")[0].files = null;
+                $("#inputPic")[0].value = null;
+            }
+            else
+                $("#LBLerrorPIC").text("");
+        }
+
+        function CheckFName(obj) {
+            try {
+                var input = obj.value;
+                if (input == "") throw "אין להשאיר שדה זה ריק";
+                if (!isNaN(input)) throw "אין למלא מספרים בשדה זה";
+                if (!(input.charCodeAt(0) >= 0x590 && input.charCodeAt(0) <= 0x5FF)) throw "יש לרשום אותיות בעברית בלבד";
+            } catch (e) {
+                $("#LBLerrorFNAME").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorFNAME").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function CheckLName(obj) {
+            try {
+                var input = obj.value;
+                if (input == "") throw "אין להשאיר שדה זה ריק";
+                if (!isNaN(input)) throw "אין למלא מספרים בשדה זה";
+                if (!(input.charCodeAt(0) >= 0x590 && input.charCodeAt(0) <= 0x5FF)) throw "יש לרשום אותיות בעברית בלבד";
+            } catch (e) {
+                $("#LBLerrorLNAME").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorLNAME").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function CheckID(obj) {
+
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/SearchForPerson",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ id: obj.value, password: "" }),
+                type: "POST",
+                success: function (res) {
+
+                    if (res.d) {
+                        $("#LBLerrorID").text("קיים משתמש במערכת עם תעודת זהות זו. לא ניתן ליצור משתמש חדש עם מספר זהה");
+                        ChangeProgress(obj, false);
+                        return;
+                    }
+                    try {
+                        var input = obj.value;
+                        if (input == "") throw "אין להשאיר שדה זה ריק";
+                        if (isNaN(input)) throw "שדה זה מחייב מספר";
+                        if (input < 100000000) throw "חובה מספר בעל 9 ספרות";
+                        if (input > 999999999) throw "חובה מספר בעל 9 ספרות";
+                    } catch (e) {
+                        $("#LBLerrorID").text(e);
+                        ChangeProgress(obj, false);
+                        return;
+                    }
+                    $("#LBLerrorID").text("");
+                    ChangeProgress(obj, true);
+                },
+                error: function (e) {
+
+                }
+            });
+        }
+
+        function CheckBirth(obj) {
+            try {
+                var input = obj.value;
+                if (input == "") throw "יש למלא תאריך לידה מלא";
+
+                var splitDate = input.split("/");
+
+                var d = new Date();
+                var thisMonth = d.getMonth() + 1;
+                var thisDay = d.getDay();
+                var thisYear = d.getFullYear();
+
+                year = parseInt(splitDate[0]);
+                month = parseInt(splitDate[1]);
+                day = parseInt(splitDate[2]);
+
+                yearsOld = thisYear - year;
+                monthsOld = thisMonth - month;
+
+                if (monthsOld < 0) {
+                    monthsOld += 12;
+                    yearsOld--;
+                }
+
+                if (yearsOld < 16 || (yearsOld == 16 && monthsOld <= 6)) {
+                    throw "הגיל המינימלי להוצאת רישיון הינו 16 וחצי";
+                }
+
+            } catch (e) {
+                $("#LBLerrorDate").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorDate").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function CheckCity(obj) {
+            try {
+                var input = obj.value;
+                if (input == "בחר") throw "יש לבחור עיר מהרשימה";
+            } catch (e) {
+                $("#LBLerrorCITY").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorCITY").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function CheckStreet(obj) {
+            try {
+                var input = obj.value;
+                if (input == "בחר") throw "יש לבחור רחוב מהרשימה";
+            } catch (e) {
+                $("#LBLerrorSTREET").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorSTREET").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function CheckPhone(obj) {
+            try {
+                var input = obj.value;
+                if (input == "") throw "אין להשאיר שדה זה ריק";
+                if (isNaN(input)) throw "שדה זה מחייב מספר";
+                if (input < 100000000 || input > 9999999999) throw "חובה מספר בעל 10 ספרות";
+                if (input / 10000000 < 50 || input / 10000000 > 60) throw "חובה קידומת תקינה";
+            } catch (e) {
+                $("#LBLerrorPHONE").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorPHONE").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function CheckMail(obj) {
+
+            var emailReg = /^([\w-\.]+@([\w-]+\.)+[\w-]{2,4})?$/;
+
+            try {
+                var input = obj.value;
+                if (input == "") throw "אין להשאיר שדה זה ריק";
+                if (!emailReg.test(input)) throw "יש למלא כתובת מייל תקינה";
+            } catch (e) {
+                $("#LBLerrorMAIL").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorMAIL").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function CheckPassword(obj) {
+            try {
+                var input = obj.value;
+                if (input == "") throw "אין להשאיר שדה זה ריק";
+                if (!/^[a-zA-Z0-9- ]*$/.test(input)) throw "יש לרשום אותיות ומספרים בלבד";
+            } catch (e) {
+                $("#LBLerrorPASS").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            finally {
+                //reset the pass authentication field to ensure it will always
+                //require to fill it again upon touching the password field
+                $("#inputPasswordAgain").val("");
+                $("#inputPasswordAgain").focus();
+            }
+            $("#LBLerrorPASS").text("");
+            ChangeProgress(obj, true);
+        }
+
+        function checkLessonsInWeekWanted(val)
+        {
+            if (val < 28) {
+                alert("המינימום הנדרש הינו 28");
+            }
+        }
+
+        //used to check if the password is written correctly in both places
+        function AuthenticatePasswordInput(obj) {
+            if ($("#inputPasswordAgain").val() != $("#inputPassword").val()) {
+                $("#LBLinputPasswordAgainError").text("סיסמה אינה תואמת");
+                ChangeProgress(obj, false);
+            }
+            else {
+                $("#LBLinputPasswordAgainError").text("");
+                ChangeProgress(obj, true);
+            }
+        }
+
+        function CheckSchool(obj) {
+            try {
+                var input = obj.value;
+                if (input == "בחר") throw "יש לבחור בית ספר מהרשימה";
+            } catch (e) {
+                $("#LBLerrorSCHOOL").text(e);
+                ChangeProgress(obj, false);
+                return;
+            }
+            $("#LBLerrorSCHOOL").text("");
+            ChangeProgress(obj, true);
+        }
+
+        //VALIDATION FUNCTIONS END
+
+        function UnknownLessonsWanted(tickBox)
+        {
+            if (tickBox.checked) {
+                $("#lessonsInWeekWanted").val("").prop("disabled","true");
+            }
+            else
+                $("#lessonsInWeekWanted").val(28).removeProp("disabled");
+        }
+
+        //to change the progress bar
+        function ChangeProgress(obj, raise) {
+
+            var $input = $("#" + obj.id);
+
+            //if its the first time filling the field
+            //the "notdone" class is to make sure we don't update progress
+            //to a field that's just being edited
+            if ($input.parent().parent().hasClass("notdone")) {
+                if (raise) {
+                    progress += parseFloat((100 / items));
+                    progressText = progress.toFixed();
+                    $input.parent().parent().addClass("done");
+                    $input.parent().parent().removeClass("notdone");
+                    $input.parent().parent().css("background", "aqua");
+                }
+                else
+                    $input.parent().parent().css("background", "lightsalmon");
+            }
+            else {
+                if (!raise) {
+                    $input.parent().parent().removeClass("done");
+                    $input.parent().parent().addClass("notdone");
+                    $input.parent().parent().css("background", "lightsalmon");
+                    progress -= parseFloat(100 / items);
+                    progressText = progress.toFixed();
+                }
+            }
+
+            $("#bar").css("width", progress + "%");
+            $("#bar").text(progressText + "%");
+        }
+
+        //fill all schools
+        function FillSchools() {
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetAllSchools",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify(),
+                type: "POST",
+                success: function (res) {
+
+                    var SchoolList = JSON.parse(res.d);
+
+                    for (var i in SchoolList) {
+                        var $option = $("<option>").html(SchoolList[i].Name).attr("id", SchoolList[i].Code);
+
+                        $("#schools").append($option);
+                    }
+
+                },
+                error: function (e) {
+                    alert("error GetAllSchools " + e.responseText);
+                }
+            });
+        }
+
+        //used to fill a city list with all the cities
+        function FillCities() {
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetAllCities",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify(),
+                type: "POST",
+                success: function (res) {
+
+                    var CityList = JSON.parse(res.d);
+
+                    for (var i in CityList) {
+                        var $option = $("<option>").html(CityList[i].Name).attr("id", CityList[i].Code);
+
+                        $("#cities").append($option);
+                    }
+
+                },
+                error: function (e) {
+                    alert("error GetAllCities " + e.responseText);
+                }
+            });
+        }
+
+        //used to fill all the streets at a given city
+        function FillStreets() {
+
+            $("#streets").html("<option>בחר</option>");
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetAllStreets",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ cityCode: $("#cities option:selected").attr("id") }),
+                type: "POST",
+                success: function (res) {
+
+                    var StreetList = JSON.parse(res.d);
+
+                    for (var i in StreetList) {
+                        var $option = $("<option>").html(StreetList[i].Name).attr("id", StreetList[i].Code);
+                        $("#streets").append($option);
+                    }
+
+                },
+                error: function (e) {
+                    alert("error GetAllStreets");
+                }
+            });
+
+            $("#streets").focus();
+        }
+
+        function AllowChangeInCity() {
+            citiesSTR = "<select id='SchoolsInCity' onchange='FillSchoolCities()'></select>";
+            $("#SchoolsInCity").replaceWith(citiesSTR);
+            FillCitiesForSchoolSinun();
+            $("#BTNcityChanger").hide();
+        }
+
+        //used to fill a list of cities only containing schools
+        function FillCitiesForSchoolSinun() {
+            $("#SchoolsInCity").html("<option>בחר</option>");
+
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetAllCitiesWithSchools",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify(),
+                type: "POST",
+                success: function (res) {
+
+                    var CityList = JSON.parse(res.d);
+
+                    for (var i in CityList) {
+                        var $option = $("<option>").html(CityList[i].Name).attr("id", CityList[i].Code);
+
+                        $("#SchoolsInCity").append($option);
+                    }
+
+                },
+                error: function (e) {
+                    alert("error GetAllCitiesWithSchools " + e.responseText);
+                }
+            });
+        }
+
+        //used to fill school list for a chosen city
+        function FillSchoolCities(codeOfCity) {
+            $("#schools").html("<option id='-1'>בחר</option>");
+
+            if ($("#SchoolsInCity option:selected").attr("id") != null) {
+                codeOfCity = $("#SchoolsInCity option:selected").attr("id");
+            }
+
+            if ($("#SchoolsInCity option:selected").text() == "") {
+                place = $("#cities option:selected").text();
+            }
+            else
+                place = $("#SchoolsInCity option:selected").text();
+
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetSchoolsInCity",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ cityCode: codeOfCity }),
+                type: "POST",
+                success: function (res) {
+
+                    var SchoolList = JSON.parse(res.d);
+
+                    for (var i in SchoolList) {
+                        var $option = $("<option>").html(SchoolList[i].Name).attr("id", SchoolList[i].Code);
+
+                        $("#schools").append($option);
+                    }
+
+                },
+                error: function (e) {
+                    alert("error GetSchoolsInCity");
+                }
+            });
+            LBLSTR = "<label id='SchoolsInCity'>" + place + "</label>";
+            $("#SchoolsInCity").replaceWith(LBLSTR);
+            $("#BTNcityChanger").show();
+
+            FillTeachersInSchool();
+
+            $("#schools").focus();
+        }
+
+        //used to fill teachers for a given school
+        function FillTeachersInSchool() {
+            $("#teachers").html("<option>בחר</option>");
+
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetTeachersInSchool",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ schoolCode: $("#schools option:selected").attr("id"), past: false }),
+                type: "POST",
+                success: function (res) {
+
+                    var TeacherList = JSON.parse(res.d);
+
+                    for (var i in TeacherList) {
+                        var $option = $("<option>").html(TeacherList[i].FirstName + " " + TeacherList[i].LastName).attr("id", TeacherList[i].Id);
+
+                        $("#teachers").append($option);
+                    }
+
+                },
+                error: function (e) {
+                    alert("error GetTeachersInSchool");
+                }
+            });
+
+            //in addition to filling the teachers, also fills the list of available
+            //licenses this school teaches
+            FillLicensesInSchool();
+
+        }
+
+        //used to show a combobox of licenses if user had any
+        function ShowLicensePakad(show) {
+            if (show) {
+                $("#HasLicensePakadim").show();
+            }
+            else
+                $("#HasLicensePakadim").hide();
+        }
+
+        //fills all of the available licenses in the db
+        function FillLicenses() {
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetLicenseInfo",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify(),
+                type: "POST",
+                success: function (res) {
+
+                    var LicenseList = JSON.parse(res.d);
+
+                    for (var i in LicenseList) {
+                        var $option = $("<option>").html(LicenseList[i].Letter + LicenseList[i].Level + " - " + LicenseList[i].Description).attr("id", LicenseList[i].Code);
+
+                        $("#previousLicense").append($option);
+                    }
+
+                },
+                error: function (e) {
+                    alert("error GetLicenseInfo");
+                }
+            });
+        }
+
+        //fills the available licenses the school teaches
+        function FillLicensesInSchool() {
+            $.ajax({
+
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetLicenseInSchoolInfo",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ schoolCode: $("#schools option:selected").attr("id") }),
+                type: "POST",
+                success: function (res) {
+
+                    var LicenseList = JSON.parse(res.d);
+
+                    for (var i in LicenseList) {
+                        var $option = $("<option>").html(LicenseList[i].Letter + LicenseList[i].Level + " - " + LicenseList[i].Description).attr("id", LicenseList[i].Code);
+
+                        $("#wantedLicense").append($option);
+                    }
+
+                },
+                error: function (e) {
+                    alert("error GetLicenseInSchoolInfo");
+                }
+            });
+        }
+
+        function CreateNewStudent() {
+
+            $(".done").css("background", "");
+            
+            //if the progress (info supplied) is not 100% completed, alert and abort
+            if ($("#bar").text() != "100%") {
+                $("#NoInfo").modal();
+                $(".notdone").css("background", "lightcoral");
+                return;
+            }
+
+            if ($("#male")[0].checked) {
+                gendercode = 1;
+            }
+            else {
+                gendercode = 2;
+            }
+
+            if ($("#android")[0].checked) {
+                platform = $("#android").val();
+            }
+            else {
+                platform = $("#ios").val();
+            }
+
+            if ($("#teachers option:selected").attr("id") != null) {
+                teachID = $("#teachers option:selected").attr("id");
+            }
+            else
+                teachID = "";
+
+            var newStudent = {
+                id: $("#inputID").val(),
+                FName: $("#inputFName").val(),
+                LName: $("#inputLName").val(),
+                CityCode: parseInt($("#cities option:selected").attr("id")),
+                StreetCode: parseInt($("#streets option:selected").attr("id")),
+                GenderCode: gendercode,
+                Phone: $("#Number").val(),
+                Platform: platform,
+                Mail: $("#inputEMail").val(),
+                Password: $("#inputPassword").val(),
+                ChosenSchool: parseInt($("#schools option:selected").attr("id")),
+                ChosenTeacher: teachID,
+                BirthDate: $("#inputBirth").val(),
+                Pic: "person_" + $("#inputID").val() + "_" + $("#inputFName").val() + "_" + $("#inputLName").val()
+            }
+
+            //upload the image file to the server
+            if (jQuery.browser.mobile) {
+                uploadPhoto(newStudent);
+            }
+
+            newStudent.Pic = GENERAL.PICTURE.path + "person_" + $("#inputID").val() + "_" + $("#inputFName").val() + "_" + $("#inputLName").val() + ".jpg";
+
+            if ($("#technicalYES")[0].checked) {
+                technical = true;
+            }
+            else {
+                technical = false;
+            }
+
+            if ($("#workingOffice")[0].checked) {
+                working = "office";
+            }
+            else if ($("#workingPhysical")[0].checked) {
+                working = "physical";
+            }
+            else {
+                working = "no";
+            }
+
+            try {
+                lessonsInWeekWanted = parseInt($("#lessonsInWeekWanted").val());
+            } catch (e) {
+                lessonsInWeekWanted = 0;
+            }
+
+            var pastExp = {
+                PreviousLicenses: parseInt($("#previousLicense :selected").length),
+                LastLessonsTook: parseInt($("#lastLessonsTook").val()),
+                LastTestPassed: parseInt($("#lastTestPassed").attr("id")),
+                TheoryNumberPassed: parseInt($("#theoryPassed").attr("id")),
+                WantedLicenseCode: parseInt($("#wantedLicense option:selected").attr("id")),
+                CarsAmount: parseInt($("#carsAmount").val()),
+                LessonsInWeekWanted: lessonsInWeekWanted,
+                Technical: technical,
+                Working: working
+            }
+
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/CreateNewStudent",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({ id: newStudent.id, FName: newStudent.FName, LName: newStudent.LName, pass: newStudent.Password, phone: newStudent.Phone, platform: newStudent.Platform, mail: newStudent.Mail, genderCode: newStudent.GenderCode, cityCode: newStudent.CityCode, streetCode: newStudent.StreetCode, schoolID: newStudent.ChosenSchool, teacherID: newStudent.ChosenTeacher, birth: newStudent.BirthDate, pic: newStudent.Pic}),
+                type: "POST",
+                success: function () {
+                    $("#OKHead").text("שלום, " + newStudent.FName + " " + newStudent.LName);
+                    $("#AddedOK").modal();
+                },
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+            
+            //Push notification
+            var push = PushNotification.init({
+                android: {
+                    senderID: GENERAL.PushNotificationSenderID
+                },
+                ios: {
+                    alert: "true",
+                    badge: "true",
+                    sound: "true",
+                    senderID: GENERAL.PushNotificationSenderID,
+                    gcmSandbox: "true"
+                },
+                windows: {}
+            });
+            
+            push.on('registration', function (res) {
+
+                deviceNumber = res.registrationId;   // hold   device number in GCM
+
+                $.ajax({
+
+                    dataType: "json",
+                    url: GENERAL.webServerAddress + "/RegisterPushNumber",
+                    contentType: "application/json; charset=utf-8",
+                    data: JSON.stringify({ user_id: newStudent.id, platform: newStudent.Platform, pushID: deviceNumber }),
+                    type: "POST",
+                    success: function () {
+                    },
+                    error: function (e) {
+                        alert("error " + e.responseText);
+                    }
+                });
+            });
+
+        }
+
+        function capturePhoto() {
+            // Take picture using device camera and retrieve image as base64-encoded string
+            navigator.camera.getPicture(onCameraSuccess, onFail, {
+                quality: 50,
+                targetWidth: 300,
+                targetHeight: 300,
+                destinationType: Camera.DestinationType.FILE_URI,
+                correctOrientation: true
+            });
+        }
+
+        // To select image from gallery
+        function getPhoto(source) {
+            // Retrieve image file location from specified source
+            navigator.camera.getPicture(onCameraSuccess, onFail, {
+                quality: 50,
+                destinationType: navigator.camera.DestinationType.FILE_URI,
+                sourceType: navigator.camera.PictureSourceType.PHOTOLIBRARY
+            });
+        }
+
+        function onFail() {
+
+        }
+
+        function onCameraSuccess(imageURI) {
+            // Show the captured photo
+            $('#personImage').attr("src", imageURI);
+
+        }
+
+        function uploadPhoto(newStudent) {
+
+            imageURI = $('#personImage').attr("src");
+            picName = newStudent.Pic;
+
+            var options = new FileUploadOptions(); // PhoneGap object to allow server upload
+            options.fileKey = "file";
+            options.fileName = picName; // file name
+            options.mimeType = "image/jpeg"; // file type
+            var params = {}; // Optional parameters
+            params.value1 = "test";
+            params.value2 = "param";
+
+            var ft = new FileTransfer();
+            ft.upload(imageURI, encodeURI(GENERAL.uploadFileAddress), win, fail, options); // Upload
+        } // Upload Photo
+
+        function win(r) {
+            var path = r.response;
+        } // win (upload success)
+
+        function fail(error) {
+            alert("An error has occurred: Code = " + error.code);
+        }
+
+        function GoBack() {
+            location.href = "loginPage.html";
+        }
+
+    </script>
+
+</head>
+<body dir="rtl">
+    <br />
+    <h1>ברוכים המצטרפים למערכת EZDrive!</h1>
+    <h2>אנא מלאו את כל הפרטים על מנת להירשם בהצלחה למערכת</h2>
+    <br />
+
+    <div class="progress" dir="rtl">
+        <div id="bar" class="progress-bar" role="progressbar" aria-valuenow="70"
+             aria-valuemin="0" aria-valuemax="100" style="width:0%;">
+            0%
+        </div>
+    </div>
+    <br /><br />
+
+
+    <input type="button" class="btn btn-danger btn-lg" value="חזרה למסך התחברות" onclick="GoBack()" />
+    <br />
+    <br />
+
+    <button data-toggle="collapse" data-target="#PersonalInfo">פרטים אישיים</button>
+    <button data-toggle="collapse" data-target="#SystemInfo">פרטי מערכת</button>
+    <button data-toggle="collapse" data-target="#ExtralInfo">נתונים נוספים</button>
+
+    <div id="PersonalInfo" class="collapse">
+
+        <form class="form-horizontal">
+
+            <!--1-->
+            <div class="form-group notdone">
+                <label class="col-sm-2 control-label">שם פרטי</label>
+                <div class="col-sm-2">
+                    <input class="form-control" id="inputFName" type="text" placeholder="שם פרטי" required autofocus onblur="CheckFName(this)">
+                </div>
+                <label id="LBLerrorFNAME"></label>
+            </div>
+
+            <!--2-->
+            <div class="form-group notdone">
+                <label class="col-sm-2 control-label">שם משפחה</label>
+                <div class="col-sm-2">
+                    <input class="form-control" id="inputLName" type="text" placeholder="שם משפחה" required autofocus onblur="CheckLName(this)">
+                </div>
+                <label id="LBLerrorLNAME"></label>
+            </div>
+
+            <!--3-->
+            <div class="form-group  notdone">
+                <label class="col-sm-2 control-label">תעודת זהות</label>
+                <div class="col-sm-2">
+                    <input class="form-control" id="inputID" type="text" placeholder="תעודת זהות" required autofocus onblur="CheckID(this)">
+                </div>
+                <label id="LBLerrorID"></label>
+            </div>
+
+            <!--13-->
+            <div class="form-group  notdone">
+                <label class="col-sm-2 control-label">תאריך לידה</label>
+                <div class="col-sm-2">
+                    <input class="form-control" id="inputBirth" type="date" required autofocus onblur="CheckBirth(this)">
+                </div>
+                <label id="LBLerrorDate"></label>
+            </div>
+
+            <!--4-->
+            <div class="form-group notdone">
+                <label>עיר</label>
+                <div>
+                    <select id="cities" onchange="FillStreets()" required autofocus onblur="CheckCity(this)">
+                        <option id="-1">בחר</option>
+                    </select>
+                </div>
+                <label id="LBLerrorCITY"></label>
+            </div>
+
+            <!--5-->
+            <div class="form-group notdone">
+                <label>רחוב</label>
+                <div>
+                    <select id="streets" required autofocus onblur="CheckStreet(this)">
+                        <option>בחר</option>
+                    </select>
+                </div>
+                <label id="LBLerrorSTREET"></label>
+            </div>
+
+            <!--6-->
+            <div class="form-group notdone">
+                <label>מין</label>
+                <label class="radio-inline"><input type="radio" id="male" name="gender" required onblur="ChangeProgress(this,true)">זכר</label>
+                <label class="radio-inline"><input type="radio" id="female" name="gender" required onblur="ChangeProgress(this, true)">נקבה</label>
+            </div>
+
+            <!--7-->
+            <div class="form-group notdone">
+                <label>מספר נייד (כולל קידומת)</label>
+                <div class="col-sm-2">
+                    <input type="text" class="form-control" id="Number" required autofocus onblur="CheckPhone(this)">
+                </div>
+                <label id="LBLerrorPHONE"></label>
+            </div>
+
+            <!--8-->
+            <div class="form-group notdone">
+                <label>פלטפורמת נייד</label>
+                <label class="radio-inline"><input type="radio" id="android" name="platform" value="android" autofocus onblur="ChangeProgress(this,true)">אנדרואיד</label>
+                <label class="radio-inline"><input type="radio" id="ios" name="platform" value="ios" autofocus onblur="ChangeProgress(this, true)">אייפון</label>
+            </div>
+
+            <!--9-->
+            <div class="form-group notdone">
+                <label class="col-sm-2 control-label">כתובת דואר אלקטרוני</label>
+                <div class="col-sm-3">
+                    <input class="form-control" id="inputEMail" type="email" placeholder="מייל" required autofocus onblur="CheckMail(this)">
+                </div>
+                <label id="LBLerrorMAIL"></label>
+            </div>
+
+            <div class="form-group" id="personPictureDiv">
+                <label class="col-sm-2 control-label">תמונת פרופיל</label>
+                <br />
+
+                <label onclick="capturePhoto()"><i class="fa fa-camera"></i> מצלמה</label>
+                &nbsp;&nbsp;&nbsp;
+                <label onclick="getPhoto()"><i class="fa fa-picture-o"></i> גלריה</label>
+
+                <br />
+
+                <img id="personImage" />
+            </div>
+
+        </form>
+
+        <button data-toggle="collapse" data-target="#PersonalInfo">סגור</button>
+
+    </div>
+
+    <div id="SystemInfo" class="collapse">
+
+        <form class="form-horizontal">
+
+            <!--10-->
+            <div class="form-group notdone">
+                <label class="col-sm-2 control-label">סיסמה</label>
+                <div class="col-sm-2">
+                    <input class="form-control" id="inputPassword" type="password" placeholder="סיסמה" required autofocus onblur="CheckPassword(this)">
+                </div>
+                <label id="LBLerrorPASS"></label>
+            </div>
+
+            <!--11-->
+            <div class="form-group notdone">
+                <label class="col-sm-2 control-label">אימות סיסמה</label>
+                <div class="col-sm-2">
+                    <input class="form-control" id="inputPasswordAgain" type="password" placeholder="סיסמה" required autofocus onblur="AuthenticatePasswordInput(this)">
+                </div>
+                <label id="LBLinputPasswordAgainError"></label>
+            </div>
+
+            <!--12-->
+            <div class="form-group notdone">
+                <label>מציג רשימת בתי ספר בעיר: </label>
+                <label id="SchoolsInCity">כל הערים</label>
+                <input type="button" id="BTNcityChanger" value="שנה לעיר אחרת" onclick="AllowChangeInCity()" />
+                <br />
+                <label>בית ספר לנהיגה</label>
+                <div>
+                    <select id="schools" onchange="FillTeachersInSchool()" onblur="CheckSchool(this)">
+                        <option id="-1">בחר</option>
+                    </select>
+                    <label id="LBLerrorSCHOOL"></label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>מורה נהיגה מועדף</label>
+                <select id="teachers">
+                    <option>ללא בחירה</option>
+                </select>
+            </div>
+
+        </form>
+
+        <button data-toggle="collapse" data-target="#SystemInfo">סגור</button>
+
+    </div>
+
+    <div id="ExtralInfo" class="collapse">
+        <h1>שלב זה אינו חובה למטרת ההרשמה</h1>
+        <p>מילוי הפרטים הבאים יאפשר לנו לנתח עבורך חבילת שיעורים המשתלמת ביותר עבורך</p>
+        <p id="genderDisclaimer">השאלון מנוסח בלשון זכר מטעמי נוחות בלבד, ומותאם לגברים ולנשים כאחד</p>
+        <form class="form-horizontal">
+
+            <div class="form-group">
+                <label class="col-sm-3 control-label">האם בבעלותך רישיון קודם?</label>
+                <div class="col-sm-2">
+                    <label class="radio-inline"><input type="radio" id="YesLicence" name="Licence" onclick="ShowLicensePakad(true)">כן</label>
+                    <label class="radio-inline"><input type="radio" id="NoLicence" name="Licence" onclick="ShowLicensePakad(false)">לא</label>
+                </div>
+            </div>
+
+            <div class="form-group" id="HasLicensePakadim">
+
+                <div class="form-group" id="previousLicenses">
+                    <label class="col-sm-2 control-label">
+                        מהו סוג הרישיון?
+                        ניתן לבחור בחירות מרובות
+                    </label>
+                    <div class="col-sm-2">
+                        <select multiple id="previousLicense" style="height:240px"></select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="col-sm-4 control-label">כמה שיעורים לקחת בהוצאת הרישיון האחרון?</label>
+                    <div class="col-sm-1">
+                        <input class="form-control" id="lastLessonsTook" type="number">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="col-sm-3 control-label">איזה טסט עברת בהוצאת הרישיון האחרון?</label>
+                    <div class="col-sm-1">
+                        <input class="form-control" id="lastTestPassed" type="number">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="col-sm-4 control-label">איזה מבחן עיוני (תיאוריה) עברת?</label>
+                    <div class="col-sm-1">
+                        <input class="form-control" id="theoryPassed" type="number">
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="form-group">
+                <label class="col-sm-3 control-label">מהו סוג הרישון המבוקש?</label>
+                <div class="col-sm-2">
+                    <select id="wantedLicense"></select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="col-sm-2 control-label" type="number">כמה רכבים בבעלות משפחתך?</label>
+                <div class="col-sm-1">
+                    <input class="form-control" id="carsAmount">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="col-sm-4 control-label">כמה שיעורים אתה מתכנן לקחת בשבוע?</label>
+                <div class="col-sm-1">
+                    <input class="form-control" id="lessonsInWeekWanted" value="28" type="number" min="28" onblur="checkLessonsInWeekWanted(this.value)">
+                    <label><input type="checkbox" id="Unknown" name="unknown" onclick="UnknownLessonsWanted(this)">לא ידוע</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="col-sm-5 control-label">האם אתה מגדיר את עצמך כאדם בעל יכולות טכניות גבוהות?</label>
+                <div class="col-sm-2">
+                    <label class="radio-inline"><input type="radio" id="technicalYES" name="technical">כן</label>
+                    <label class="radio-inline"><input type="radio" id="technicalNO" name="technical">לא</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="col-sm-3 control-label">במידה ועובד, באיזו סוג עבודה אתה עוסק?</label>
+                <div class="col-sm-3">
+                    <label class="radio-inline"><input type="radio" id="workingOffice" name="working">משרדית</label>
+                    <label class="radio-inline"><input type="radio" id="workingPhysical" name="working">פיזית</label>
+                    <label class="radio-inline"><input type="radio" id="workinglNO" name="working">לא עובד</label>
+                </div>
+            </div>
+
+        </form>
+
+        <button data-toggle="collapse" data-target="#ExtralInfo">סגור</button>
+
+    </div>
+
+    <br /><br /><br />
+
+    <!-- Trigger the modal with a button -->
+    <button type="button" id="signUpStartUp" class="btn btn-info btn-lg" data-toggle="modal" data-target="#Confirm">הירשם</button>
+
+    <!-- Modal -->
+    <div id="Confirm" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">אישור הרשמה</h4>
+                </div>
+                <div class="modal-body">
+                    <p>האם כל הפרטים הנ''ל נכונים?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success  media-body" data-dismiss="modal" onclick="CreateNewStudent()">אישור</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal">ביטול</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="NoInfo" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">לא הוזנו כל הפרטים</h4>
+                </div>
+                <div class="modal-body">
+                    <p>יש למלא את כל הפרטים הנחוצים להרשמה</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal">הבנתי</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="AddedOK" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title" id="OKHead"></h4>
+                </div>
+                <div class="modal-body">
+                    <p>פרטייך נקלטו במערכת בהצלחה.</p>
+                    <p>הסטאטוס שלך הוגדר כ: לא פעיל. על מנת שיהפוך לפעיל, על המורה הנבחר או מנהל בית הספר לאשר את הרשמתך. תקבל הודעה כאשר הרשמתך תאושר.</p>
+                    <p>תודה רבה שבחרת בEZDrive!</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal" onclick="GoBack()">סיום וחזרה לדף התחברות</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

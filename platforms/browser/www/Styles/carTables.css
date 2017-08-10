@@ -1,0 +1,7 @@
+﻿#carImg, .miniImg, #carImage{
+            height: 80px;
+            width: 80px;
+        }
+        #carColor{
+            height:20px;
+        }

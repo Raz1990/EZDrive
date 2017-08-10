@@ -1,0 +1,382 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <meta charset="utf-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link href="bootstrap-4.0.0-alpha.6-dist/css/bootstrap.min.css" rel="stylesheet" />
+    <script src="lib/jquery-1.11.3.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
+    <script src="bootstrap-4.0.0-alpha.6-dist/js/bootstrap.min.js"></script>
+
+    <script src="ExtraJS/mobileChecker.js"></script>
+    <script src="ExtraJS/master.js"></script>
+    <link href="Styles/NavBarStyle.css" rel="stylesheet" />
+    <link href="Styles/NeedRightSuperStyle.css" rel="stylesheet" />
+    <link href="Styles/EveryPageStyle.css" rel="stylesheet" />
+
+    <link href="lib/font-awesome-4.7.0/css/font-awesome.min.css" rel="stylesheet" />
+
+    <link href="lib/w3.css" rel="stylesheet" />
+
+    <script src="ExtraJS/ddtf.js"></script>
+
+    <style>
+        img{
+            height:15px;
+        }
+    </style>
+
+    <script>
+
+        teacher = null;
+        currentUser = null;
+        EventCode = 0;
+        items = 51;
+        progress = 0
+        progressText = 0;
+
+
+        $(document).ready(function () {
+
+            currentUser = GENERAL.USER.getUserInfo();
+            //if coming here without logging in first
+            if (currentUser == null || currentUser.type != "student") {
+                location.href = "loginPage.html";
+                return;
+            }
+
+            //if NOT on mobile
+            if (!jQuery.browser.mobile) {
+                //hide the microphone options
+                $("#recIcon").hide();
+            }
+
+            //set the info panel with the user info
+            $("#user-image").attr("src", currentUser.image)
+            $("#userFullName").text(GENERAL.USER.getUserFullName());
+
+            //if there is no current teacher stored
+            if (GENERAL.STUDENT.getStudentTeacher() == null) {
+                $.ajax({
+
+                    dataType: "json",
+                    url: GENERAL.webServerAddress + "/GetTeacherOverStudent",
+                    contentType: "application/json; charset=utf-8",
+                    data: JSON.stringify({ studentID: currentUser.id }),
+                    type: "POST",
+                    async: false,
+                    success: function (res) {
+                        teacher = JSON.parse(res.d);
+                        GENERAL.STUDENT.setStudentTeacher(teacher);
+                    },
+                    error: function (e) {
+                        alert("error " + e.responseText);
+                    }
+                });
+            }
+            else {
+                teacher = GENERAL.STUDENT.getStudentTeacher();
+            }
+
+            //fill the personal info modal with info
+            fillPersonalInfoModal();
+
+            FillProgressTable();
+            GetAmountOfLessons();
+
+
+        }); //document ready
+
+        function VoiceCommand() {
+            //window.plugins.speechRecognition.isRecognitionAvailable(
+            //    function (e) {
+            //        alert('isRecognitionAvailable:' + e);
+            //    },
+            //    function (e) {
+            //        alert('error' + e);
+            //    }
+            //);
+
+            window.plugins.speechRecognition.requestPermission(
+              function (e)
+              { },
+              function (e) {
+                  return;
+              })
+
+            var options = {
+                language: "he",
+                matches: 1,
+                prompt: "מאזין",      // Android only
+                showPopup: true,  // Android only
+                showPartial: false // iOS only
+            }
+
+            window.plugins.speechRecognition.startListening(
+                function (e) {
+                    //if it's a common phrase and was dealt with in the master.js file
+                    if (VoiceCommands(e)) {
+                        return;
+                    }
+                },
+                function (e) {
+                    alert('error' + e);
+                },
+                options);
+        }
+
+        function GetAmountOfLessons()
+        {
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetLastLesson",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify({teacherID: teacher.Id,  studentID: currentUser.id}),
+                type: "POST",
+                success: function (res) {
+                    $("#lessonsDone").text("שיעורים שבוצעו: " + res.d);
+                },//success 
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function FillProgressTable() {
+            $.ajax({
+                dataType: "json",
+                url: GENERAL.webServerAddress + "/GetEpisodes",
+                contentType: "application/json; charset=utf-8",
+                data: JSON.stringify(),
+                type: "POST",
+                success: function (res) {
+
+                    episodeList = JSON.parse(res.d);
+
+                    $.ajax({
+                        dataType: "json",
+                        url: GENERAL.webServerAddress + "/GetStudentProgress",
+                        contentType: "application/json; charset=utf-8",
+                        data: JSON.stringify({ id: currentUser.id }),
+                        type: "POST",
+                        success: function (res) {
+
+                            progressList = res.d;
+
+                            progressCounter = 0;
+
+                            stepsDone = progressList.length;
+
+                            $("#progressDone").text("שלבים שבוצעו: " + stepsDone + "/" + items);
+
+                            progress = parseFloat((stepsDone / items)) * 100;
+                            progressText = progress.toFixed();
+
+                            $("#bar").css("width", progress + "%");
+                            $("#bar").text(progressText + "%");
+
+                            for (var i in episodeList) {
+                                for (var j in episodeList[i].Phases) {
+                                    var $tr = $("<tr>").attr("id", episodeList[i].Code);
+                                    var $td_sidury = $("<td>").text(episodeList[i].Phases[j].Code);
+                                    var $td_episode = $("<td>").text(episodeList[i].Name).attr("id", episodeList[i].Code);
+                                    var $td_lvl = $("<td>").text(episodeList[i].Phases[j].Name);
+
+                                    var $td_check = $("<td>");
+
+                                    //if the current phase code matches a code in the student progress
+                                    if (progressList[progressCounter] == episodeList[i].Phases[j].Code && progressCounter < stepsDone) {
+
+                                        $img = $("<img>").addClass("miniImg").attr("src", "images/greenV.png");
+
+                                        $td_check.append($img);
+
+                                        progressCounter++;
+                                    }
+
+                                    if (j > 0) {
+                                        $tr.css("display", "none").addClass("" + episodeList[i].Code + "");
+                                    }
+                                    else {
+                                        $tr.css("background-color", "rgba(16, 227, 126, 0.56)");
+                                        $td_episode.css("cursor", "pointer").click(function () {
+                                            $("." + $(this).attr("id")).toggle();
+                                        });
+                                    }
+                                    $tr.append($td_sidury, $td_check, $td_episode, $td_lvl);
+                                    $("#ProgressTable").append($tr);
+                                }
+                            }
+                            $('#ProgressTable').ddTableFilter();
+                        }//success student progress
+                    });
+                },//success episodes
+                error: function (e) {
+                    alert("error " + e.responseText);
+                }
+            });
+        }
+
+        function ChangeProgress(obj, raise) {
+
+            var $input = $("#" + obj.id);
+
+            //if its the first time filling the field
+            //the "notdone" class is to make sure we don't update progress
+            //to a field that's just being edited
+            if ($input.parent().parent().hasClass("notdone")) {
+                if (raise) {
+                    progress += parseFloat((100 / items));
+                    progressText = progress.toFixed();
+                    $input.parent().parent().addClass("done");
+                    $input.parent().parent().removeClass("notdone");
+                    $input.parent().parent().css("background", "aqua");
+                }
+                else
+                    $input.parent().parent().css("background", "lightsalmon");
+            }
+            else {
+                if (!raise) {
+                    $input.parent().parent().removeClass("done");
+                    $input.parent().parent().addClass("notdone");
+                    $input.parent().parent().css("background", "lightsalmon");
+                    progress -= parseFloat(100 / items);
+                    progressText = progress.toFixed();
+                }
+            }
+
+            $("#bar").css("width", progress + "%");
+            $("#bar").text(progressText + "%");
+        }
+
+        function LogOut() {
+            Hitnatkut();
+        }
+
+        function fillPersonalInfoModal() {
+            $("#popupFirstName").text("שם פרטי: " + currentUser.firstName);
+            $("#popupLastName").text("שם משפחה: " + currentUser.lastName);
+            $("#popupRegisterDate").text("תאריך הצטרפות: " + currentUser.register);
+
+            $("#popupTeacherName").text("מורה מלמד: " + teacher.FirstName + " " + teacher.LastName);
+
+        }
+
+        function ShowPersonalInfoModal() {
+            $("#ShowPersonalInfo").modal();
+        }
+
+        function GoToEdit() {
+            location.href = "editUserDetailes.html";
+        }
+
+    </script>
+
+</head>
+<body>
+    <nav class="navbar navbar-toggleable-md navbar-inverse bg-inverse fixed-top">
+        <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <a class="navbar-brand" href="studentCalendar.html" data-toggle="tooltip" title="דף הבית">
+            <img id="logo" src="images/EZDrive.png" />
+        </a>
+        <a class="navbar-brand" href="https://www.facebook.com/EZDrive-1357166781017888/" data-toggle="tooltip" title="לפייסבוק האפליקציה">
+            <i class="fa fa-facebook-official" style="color:white"></i>
+        </a>
+        <div class="collapse navbar-collapse" id="navbarsExampleDefault">
+
+            <div id="userInfoPanel" onclick="ShowPersonalInfoModal()" data-toggle="tooltip" data-placement="bottom" title="לחץ כאן לפרופיל">
+                <img id="user-image">
+                <span id="userFullName"></span>
+            </div>
+
+            <ul class="navbar-nav mr-auto">
+                <li>
+                    <a class="nav-link" href="studentCalendar.html"><i class="fa fa-calendar"></i> לוח זמנים <span class="sr-only">(current)</span></a>
+                </li>
+                <li>
+                    <a class="nav-link nav-item active " href="studentProgress.html"><i class="fa fa-percent"></i> התקדמות</a>
+                </li>
+                <li>
+                    <a class="nav-link" href="studentGreenForm.html"><i class="fa fa-file-o"></i> טופס ירוק</a>
+                </li>
+                <li>
+                    <a class="nav-link" href="studentRequest.html"><i class="fa fa-comment-o"></i> בקשות אישיות</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="settings.html"><i class="fa fa-cog fa-spin"></i> הגדרות</a>
+                </li>
+                <li class="nav-item">
+                    <i class="fa fa-microphone" id="recIcon" onclick="VoiceCommand()"></i>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <br /><br /><br /><br />
+
+    <div class="progress" dir="rtl" style="border:solid">
+        <div id="bar" class="progress-bar" role="progressbar" aria-valuenow="70"
+             aria-valuemin="0" aria-valuemax="100" style="width:0%">
+            0%
+        </div>
+    </div>
+
+    <p id="lessonsDone">שיעורים שבוצעו: </p>
+    <p id="progressDone">שלבים שבוצעו: </p>
+
+    <div style="margin-top:100px; direction:rtl">
+        <h2 id="headlight">טבלת השלבים</h2>
+        <table id="ProgressTable" class="w3-table-all w3-centered w3-hoverable">
+            <thead>
+                <tr class="w3-green">
+                    <th>
+                        מספר שלב
+                    </th>
+                    <th>
+                        בוצע?
+                    </th>
+                    <th>
+                        פרק
+                    </th>
+                    <th>
+                        שלב
+                    </th>
+                </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+        </table>
+    </div>
+
+    <!-- Modals -->
+
+    <div id="ShowPersonalInfo" class="modal fade" role="dialog">
+        <div class="modal-dialog">
+
+            <!-- Modal content-->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">פרטים אישיים</h4>
+                </div>
+                <div class="modal-body">
+                    <p id="popupFirstName"></p>
+                    <p id="popupLastName"></p>
+                    <p id="popupRegisterDate"></p>
+                    <p id="popupTeacherName"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" data-dismiss="modal" onclick="GoToEdit()">עריכת פרטים</button>
+                    <button type="button" class="btn btn-danger" data-dismiss="modal" onclick="LogOut()">התנתקות</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

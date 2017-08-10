@@ -1,0 +1,17 @@
+﻿body {
+    background-image: url('../images/scribble_light/scribble_light.png');
+}
+
+div, input{
+    margin-right:2px;
+    margin-left:2px;
+}
+
+#recIcon{
+    cursor:pointer;
+    margin:10px;
+}
+
+.progress{
+    border:solid;
+}
